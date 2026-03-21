@@ -5,10 +5,9 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.core.config import settings
-
-from src.core.exceptions import setup_exception_handlers
 from src.api.v1.endpoints.auth import router
+from src.core.config import settings
+from src.core.exceptions import setup_exception_handlers
 from src.db.session import session_manager
 
 # from src.utils.cache import cache_manager

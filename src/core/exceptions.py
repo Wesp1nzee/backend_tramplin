@@ -3,34 +3,49 @@ from fastapi.responses import JSONResponse
 
 
 class AppError(Exception):
-    """Базовое исключение для всего приложения."""
+    """
+    Базовый класс для всех доменных исключений.
+    Наследники объявляют status_code и detail на уровне класса —
+    это позволяет raise SomeError() без аргументов и получить
+    осмысленный HTTP-ответ через глобальный обработчик.
+    """
 
-    def __init__(self, message: str, status_code: int = status.HTTP_400_BAD_REQUEST) -> None:
-        self.message = message
-        self.status_code = status_code
+    status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
+    detail: str = "Internal server error"
+
+    def __init__(self, detail: str | None = None) -> None:
+        self.detail = detail or self.__class__.detail
+        super().__init__(self.detail)
 
 
 class UserAlreadyExistsError(AppError):
-    def __init__(self) -> None:
-        super().__init__(
-            message="Пользователь с таким email уже зарегистрирован",
-            status_code=status.HTTP_409_CONFLICT,
-        )
+    status_code = status.HTTP_409_CONFLICT
+    detail = "User with this email already exists"
 
 
 class InvalidCredentialsError(AppError):
-    def __init__(self) -> None:
-        super().__init__(
-            message="Неверный email или пароль", status_code=status.HTTP_401_UNAUTHORIZED
-        )
+    status_code = status.HTTP_401_UNAUTHORIZED
+    detail = "Invalid email or password"
+
+
+class InvalidTokenError(AppError):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    detail = "Invalid or expired token"
+
+
+class UserNotActiveError(AppError):
+    status_code = status.HTTP_403_FORBIDDEN
+    detail = "User account is deactivated"
+
+
+class NotFoundError(AppError):
+    status_code = status.HTTP_404_NOT_FOUND
+    detail = "Resource not found"
 
 
 class PermissionDeniedError(AppError):
-    def __init__(self) -> None:
-        super().__init__(
-            message="Недостаточно прав для выполнения операции",
-            status_code=status.HTTP_403_FORBIDDEN,
-        )
+    status_code = status.HTTP_403_FORBIDDEN
+    detail = "Not enough permissions"
 
 
 def setup_exception_handlers(app: FastAPI) -> None:
@@ -38,5 +53,5 @@ def setup_exception_handlers(app: FastAPI) -> None:
     async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content={"error": exc.message, "code": exc.__class__.__name__},
+            content={"detail": exc.detail},
         )

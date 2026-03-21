@@ -22,13 +22,13 @@ class SessionManager:
         Инициализация движка с настройками для Highload.
         """
         self.engine = create_async_engine(
-            str(db_url),  # ← ВАЖНО: конвертируем PostgresDsn в строку
-            echo=False,  # В проде логгирование SQL запросов убивает перформанс
-            pool_size=20,  # Базовое количество постоянных соединений
-            max_overflow=10,  # Сколько соединений можно создать сверх лимита при пиках
-            pool_timeout=30,  # Сколько ждать свободного соединения из пула
-            pool_recycle=1800,  # Сброс соединения каждые 30 мин (защита от утечек в БД)
-            pool_pre_ping=True,  # Проверка живое ли соединение перед выдачей (защита от 500 ошибок)
+            str(db_url),
+            echo=False,
+            pool_size=20,
+            max_overflow=10,
+            pool_timeout=30,
+            pool_recycle=1800,
+            pool_pre_ping=True,
         )
 
         self.session_maker = async_sessionmaker(
@@ -47,6 +47,10 @@ class SessionManager:
 
     async def check_health(self) -> bool:
         """Проверка связи с БД для Health Check."""
+        if self.session_maker is None:
+            logger.error("Database session maker is not initialized")
+            return False
+
         try:
             async with self.session_maker() as session:
                 from sqlalchemy import text

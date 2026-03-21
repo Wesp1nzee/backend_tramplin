@@ -10,3 +10,6 @@ wheels/
 .venv
 .env
 .ruff_cache
+.mypy_cache
+.pytest_cache
+.vscode
