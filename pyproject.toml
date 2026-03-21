@@ -1,7 +1,80 @@
 [project]
-name = "backend-tramplin"
+name = "backend_tramplin"
 version = "0.1.0"
-description = "Add your description here"
+description = "Tramplin"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    # Core API & Server
+    "fastapi>=0.110.0",
+    "granian[reload]>=2.7.2",
+    "pydantic[email]>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    # Database & ORM
+    "sqlalchemy[asyncio]>=2.0.25",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
+    "geoalchemy2>=0.14.0",
+    "shapely>=2.0.0",
+    # Auth & Security
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    # Cache & Messaging
+    "redis[hiredis]>=7.3.0",
+    "faststream[rabbit]>=0.4.0",
+    # Logging & Observability
+    "structlog>=25.5.0",
+    "python-multipart>=0.0.22",
+]
+
+[dependency-groups]
+dev = [
+    # Linting & Formatting
+    "ruff>=0.3.0",
+    "mypy>=1.9.0",
+    
+    # Testing
+    "pytest>=9.0.0",
+    "pytest-asyncio>=1.3.0",
+    "httpx>=0.27.0",
+    "polyfactory>=3.3.0", 
+]
+
+[tool.uv]
+managed = true
+package = false
+
+[tool.hatch.build.targets.wheel]
+skip = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "ANN", "UP", "N"]
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/env.py" = ["F401"]
+"**/all_models.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["pydantic.mypy"]
+
+mypy_path = "."
+explicit_package_bases = true
+namespace_packages = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+asyncio_default_test_loop_scope = "session"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

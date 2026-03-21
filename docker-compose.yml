@@ -1,0 +1,61 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    container_name: tramplin_api
+    restart: always
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    networks:
+      - tramplin_net
+
+  db:
+    image: postgis/postgis:18-3.6
+    container_name: tramplin_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-tramplin}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tramplin_net
+
+  cache:
+    image: redis:7.2
+    container_name: tramplin_cache
+    restart: always
+    networks:
+      - tramplin_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+
+  mq:
+    image: rabbitmq:3-management
+    container_name: tramplin_mq
+    ports:
+      - "15672:15672"
+    networks:
+      - tramplin_net
+
+networks:
+  tramplin_net:
+    driver: bridge
+
+volumes:
+  pgdata:
