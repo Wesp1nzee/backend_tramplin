@@ -1,76 +1,145 @@
+# Tramplin API
 
-### 📂 Full Project Architecture
+Backend для экосистемы «Трамплин» — платформа для студентов и работодателей.
 
-```text
-tramplin-backend/
-├── .github/workflows/       # CI/CD пайплайны (test, lint, deploy)
-├── docker/                  # Конфигурации окружений
-│   ├── app.Dockerfile       # Multi-stage build (uv-based)
-│   ├── postgis.conf         # Тюнинг PostgreSQL под Highload
-│   └── valkey.conf          # Конфиг кэша
-├── scripts/                 # Утилиты для миграций и инициализации БД
-├── tests/                   # Пирамида тестирования
-│   ├── unit/                # Тесты сервисов и логики
-│   ├── integration/         # Тесты репозиториев и БД
-│   └── e2e/                 # Тесты API эндпоинтов (через TestClient)
-│
-├── src/                     # Основной код приложения
-│   ├── main.py              # Точка входа, lifespan, подключение роутеров
-│   │
-│   ├── api/                 # Слой интерфейсов (Delivery Layer)
-│   │   ├── deps.py          # Инъекция зависимостей (get_db, get_user)
-│   │   └── v1/
-│   │       ├── auth.py      # Регистрация и JWT (соискатель/работодатель)
-│   │       ├── vacancies.py # Поиск, карта, фильтрация
-│   │       ├── profile.py   # Личные кабинеты и настройки приватности
-│   │       ├── company.py   # Управление карточками и верификация
-│   │       ├── social.py    # Нетворкинг и контакты
-│   │       └── curator.py   # Админка и модерация (Curator)
-│   │
-│   ├── core/                # Глобальные настройки и безопасность
-│   │   ├── config.py        # pydantic-settings (env vars)
-│   │   ├── security.py      # Хеширование, логика токенов
-│   │   ├── exceptions.py    # Глобальные обработчики ошибок
-│   │   └── logging.py       # Конфиг structlog (JSON для ELK/Loki)
-│   │
-│   ├── db/                  # Инфраструктурный слой БД
-│   │   ├── session.py       # Настройка AsyncSession (SQLAlchemy + asyncpg)
-│   │   ├── base.py          # DeclarativeBase, Mixins (Timestamp, Tenant)
-│   │   └── repositories/    # Паттерн Repository (инкапсуляция SQL)
-│   │       ├── base.py      # GenericRepository[T]
-│   │       ├── user_repo.py
-│   │       ├── vacancy_repo.py # Гео-запросы через PostGIS
-│   │       └── company_repo.py
-│   │
-│   ├── models/              # SQLAlchemy ORM модели (Domain Entities)
-│   │   ├── user.py          # User, Profile 
-│   │   ├── company.py       # Company, VerificationData
-│   │   ├── vacancy.py       # Vacancy, Tag, Location
-│   │   └── interaction.py   # Application, Connection, Favorite
-│   │
-│   ├── schemas/             # Pydantic модели (Data Transfer Objects)
-│   │   ├── common.py        # Пагинация, гео-координаты, базовые типы
-│   │   ├── user.py          # Регистрация, профиль, приватность
-│   │   ├── vacancy.py       # Карточка, превью, фильтры
-│   │   └── company.py       # Данные компании, верификация
-│   │
-│   ├── services/            # Слой бизнес-логики (Use Cases)
-│   │   ├── auth_service.py  # Логика входа и ролей
-│   │   ├── geo_service.py   # Работа с картой и кластеризацией
-│   │   ├── verify_service.py # Логика верификации работодателей
-│   │   ├── vacancy_service.py # Обработка вакансий и тегов
-│   │   └── social_service.py # Логика нетворкинга и рекомендаций
-│   │
-│   ├── workers/             # Фоновые задачи (FastStream / Celery)
-│   │   ├── email_tasks.py   # Уведомления об откликах, верификация
-│   │   └── report_tasks.py  # Генерация отчетов для кураторов
-│   │
-│   └── utils/               # Вспомогательные модули
-│       ├── cache.py         # Обертки для Redis (кэш поиска)
-│       └── storage.py       # Интеграция с S3 для медиа (фото офисов)
-│
-├── alembic/                 # Миграции базы данных
-├── .env.example             # Шаблон переменных окружения
-├── docker-compose.yml       # Оркестрация локального окружения
-└── pyproject.toml           # Конфиг uv, ruff, mypy, pytest
+**Стек:** FastAPI, SQLAlchemy (async), Alembic, PostgreSQL (+PostGIS), Redis, RabbitMQ, uv
+
+---
+
+## 🚀 Быстрый старт
+
+### Требования
+
+- Python 3.14 (управляется через [`uv`](https://github.com/astral-sh/uv))
+- Docker и Docker Compose
+
+### Установка
+
+```bash
+# Клонировать репозиторий
+git clone <repository-url> && cd backend_tramplin
+
+# Синхронизировать зависимости
+uv sync
+
+# Создать файл окружения
+cp .example.env .env
 ```
+
+Отредактируйте `.env`, указав необходимые переменные (минимум — `SECRET_KEY` и параметры БД).
+
+### Запуск через Docker Compose
+
+```bash
+docker-compose up -d
+```
+
+Сервер доступен на `http://localhost:8000`.
+
+### Локальный запуск (без Docker)
+
+```bash
+# Запуск сервера разработки
+make run
+
+# Или напрямую
+uv run granian src.main:app --interface asgi --reload
+```
+
+---
+
+## 📚 Документация API
+
+После запуска сервера:
+
+| Эндпоинт | Описание |
+|----------|----------|
+| `http://localhost:8000/api/docs` | Swagger UI (автосгенерированная документация) |
+| `http://localhost:8000/health` | Health check для Docker/K8s |
+
+---
+
+## 🛠 Разработка
+
+### Основные команды
+
+```bash
+# Запуск линтера
+make lint
+
+# Форматирование кода
+make format
+
+# Проверка типов
+make typecheck
+
+# Запуск всех проверок
+make all
+
+# Запуск тестов
+make test
+
+# Синхронизация зависимостей
+make sync
+```
+
+### Работа с миграциями
+
+```bash
+# Создать миграцию (автоматически)
+make mm m="описание миграции"
+
+# Применить все миграции
+make migrate
+
+# Откатить последнюю миграцию
+make rollback
+
+# История миграций
+make history
+
+# Текущая миграция
+make current
+```
+
+---
+
+## 🧪 Тестирование
+
+```bash
+# Запустить все тесты
+uv run pytest tests/ -v
+
+# Запустить с покрытием
+uv run pytest tests/ -v --cov=src
+
+# Запустить конкретный тест
+uv run pytest tests/unit/test_auth.py -v
+```
+
+---
+
+## 📁 Структура проекта
+
+```
+src/
+├── main.py              # Точка входа, lifespan, middleware
+├── api/                 # HTTP слой (endpoints, deps)
+│   └── v1/
+│       └── endpoints/   # Роутеры по доменам (auth, users, etc.)
+├── core/                # Конфигурация, безопасность, исключения
+├── db/                  # Сессии БД, базовые классы моделей
+├── models/              # SQLAlchemy ORM модели
+├── schemas/             # Pydantic схемы (DTO)
+├── repositories/        # Слой доступа к данным (Repository pattern)
+└── services/            # Бизнес-логика (Use Cases)
+```
+
+Полное описание архитектуры — см. [ARCHITECTURE.md](./ARCHITECTURE.md)
+
+---
+
+## 🔗 Ссылки
+
+- [Архитектура](./ARCHITECTURE.md)
+- [ADR записи](./docs/adr/)
