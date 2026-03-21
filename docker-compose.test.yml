@@ -1,0 +1,15 @@
+services:
+  test_db:
+    image: postgis/postgis:18-3.6
+    container_name: tramplin_test_db
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: test_tramplin
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_tramplin"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
