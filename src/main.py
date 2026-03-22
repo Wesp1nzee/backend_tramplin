@@ -52,8 +52,8 @@ def create_app() -> FastAPI:
         openapi_url="/api/openapi.json" if settings.ENABLE_DOCS else None,
     )
 
+    app.state.limiter = limiter
     if settings.ENABLE_RATE_LIMITING:
-        app.state.limiter = limiter
         app.add_exception_handler(
             RateLimitExceeded,
             _rate_limit_exceeded_handler,  # type: ignore[arg-type]

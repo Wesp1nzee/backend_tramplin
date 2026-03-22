@@ -17,6 +17,8 @@ from src.db.session import get_db
 from src.main import app
 from src.models.user import Profile, User
 
+app.state.limiter.enabled = False
+
 TEST_DATABASE_URL = (
     "postgresql+asyncpg://test_user:test_password@localhost:5433/test_tramplin?ssl=disable"
 )
@@ -73,8 +75,10 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
 
     app.dependency_overrides[get_db] = _override_get_db
 
-    if hasattr(app.state, "limiter"):
-        app.state.limiter.enabled = False
+    limiter = app.state.limiter
+    limiter.enabled = False
+    if hasattr(limiter, "_storage") and hasattr(limiter._storage, "storage"):
+        limiter._storage.storage.clear()
 
     transport = ASGITransport(app=app)
 
