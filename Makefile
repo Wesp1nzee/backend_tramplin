@@ -1,4 +1,6 @@
-.PHONY: lint format typecheck all run sync mm migrate rollback history current
+.PHONY: lint format typecheck security security-scan all run sync mm migrate rollback history current test install-hooks
+
+# ─── Code Quality ──────────────────────────────────────────────────────────────
 
 # Запуск линтера
 lint:
@@ -12,8 +14,20 @@ format:
 typecheck:
 	uv run mypy .
 
-# Запуск всего сразу
-all: format lint typecheck
+# Проверка кода на уязвимости (Bandit)
+security-bandit:
+	uv run bandit -r src/ --skip B105,B106
+
+# Аудит зависимостей на CVE (pip-audit)
+security-audit:
+	uv run pip-audit
+
+# Запуск всех проверок безопасности
+security: security-bandit security-audit
+
+# Запуск всего: форматирование + линт + типы + безопасность
+all: format lint typecheck security
+
 
 # Запуск FastAPI в режиме разработки
 run:
@@ -21,11 +35,15 @@ run:
 
 # Запуск тестов
 test:
-	uv run pytest tests/ -v
+	./scripts/run_tests.sh
 
 # Синхронизация зависимостей
 sync:
-	uv sync
+	uv sync --all-extras --dev
+
+# Установка pre-commit хуков
+install-hooks:
+	uv run pre-commit install
 
 # Создать новую миграцию
 # Использование: make mm m="описание миграции"
@@ -51,3 +69,9 @@ current:
 # Создать пустую миграцию
 revision:
 	uv run alembic revision -m "$(m)"
+
+# Проверка перед коммитом (быстрая)
+pre-commit: format lint security-bandit
+
+# Проверка перед пушем (полная)
+pre-push: all test

@@ -13,7 +13,7 @@ async def test_full_auth_flow(client: AsyncClient) -> None:
     """
     user_data = {
         "email": "test@example.com",
-        "password": "very_strong_password_123",
+        "password": "VeryStr0ng_Passw0rd!",
         "first_name": "Aleksey",
         "last_name": "Dev",
         "role": str(UserRole.APPLICANT),
@@ -55,7 +55,7 @@ async def test_login_invalid_credentials(client: AsyncClient) -> None:
     """
     Проверка обработки неверных учетных данных.
     """
-    login_data = {"username": "nonexistent@email.com", "password": "wrongpassword"}
+    login_data = {"username": "nonexistent@email.com", "password": "VeryStr0ng_Passw0rd!"}
     response = await client.post("/api/v1/auth/login", data=login_data)
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED

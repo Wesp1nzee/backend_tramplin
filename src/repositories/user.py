@@ -1,10 +1,15 @@
 from uuid import UUID
 
+import structlog
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
+from src.core.exceptions import RepositoryError
 from src.models.user import Profile, User
 from src.repositories.base import BaseRepository
+
+logger = structlog.get_logger()
 
 
 class UserRepository(BaseRepository[User]):
@@ -17,30 +22,46 @@ class UserRepository(BaseRepository[User]):
 
     async def get_by_email(self, email: str) -> User | None:
         """Найти пользователя по email (без профиля)."""
-        result = await self.db.execute(select(User).where(User.email == email))
-        return result.scalar_one_or_none()
+        try:
+            result = await self.db.execute(select(User).where(User.email == email))
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error("Database error while getting user by email", error=str(e))
+            raise RepositoryError() from e
 
     async def get_with_profile(self, user_id: UUID) -> User | None:
         """Загрузить пользователя вместе с профилем (один запрос через JOIN)."""
-        result = await self.db.execute(
-            select(User).options(selectinload(User.profile)).where(User.id == user_id)
-        )
-        return result.scalar_one_or_none()
+        try:
+            result = await self.db.execute(
+                select(User).options(selectinload(User.profile)).where(User.id == user_id)
+            )
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error("Database error while getting user with profile", error=str(e))
+            raise RepositoryError() from e
 
     async def get_by_email_with_profile(self, email: str) -> User | None:
         """Найти пользователя по email вместе с профилем."""
-        result = await self.db.execute(
-            select(User).options(selectinload(User.profile)).where(User.email == email)
-        )
-        return result.scalar_one_or_none()
+        try:
+            result = await self.db.execute(
+                select(User).options(selectinload(User.profile)).where(User.email == email)
+            )
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error("Database error while getting user by email with profile", error=str(e))
+            raise RepositoryError() from e
 
     async def email_exists(self, email: str) -> bool:
         """
         Проверить занятость email.
         Делаем SELECT только на id — дешевле чем тянуть весь объект.
         """
-        result = await self.db.execute(select(User.id).where(User.email == email))
-        return result.scalar_one_or_none() is not None
+        try:
+            result = await self.db.execute(select(User.id).where(User.email == email))
+            return result.scalar_one_or_none() is not None
+        except SQLAlchemyError as e:
+            logger.error("Database error while checking email exists", error=str(e))
+            raise RepositoryError() from e
 
     async def create_with_profile(
         self,
@@ -52,18 +73,24 @@ class UserRepository(BaseRepository[User]):
         Атомарно создаёт пользователя и его профиль в одной транзакции.
         Возвращает пользователя с уже загруженным профилем.
         """
-        self.db.add(user)
-        await self.db.flush()  # Получаем user.id до commit
+        try:
+            self.db.add(user)
+            await self.db.flush()
 
-        profile = Profile(
-            user_id=user.id,
-            first_name=first_name,
-            last_name=last_name,
-        )
-        self.db.add(profile)
-        await self.db.commit()
+            profile = Profile(
+                user_id=user.id,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            self.db.add(profile)
+            await self.db.commit()
 
-        # После commit сессия detach объекты — перезагружаем с профилем
-        refreshed = await self.get_with_profile(user.id)
-        assert refreshed is not None  # noqa: S101 — только что создали
-        return refreshed
+            refreshed = await self.get_with_profile(user.id)
+            if refreshed is None:
+                logger.error("Created user not found after commit", user_id=str(user.id))
+                raise RepositoryError(detail="Failed to retrieve created user with profile")
+            return refreshed
+        except SQLAlchemyError as e:
+            await self.db.rollback()
+            logger.error("Database error while creating user with profile", error=str(e))
+            raise RepositoryError() from e

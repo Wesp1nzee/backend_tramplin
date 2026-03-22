@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import jwt  # Используем PyJWT
+import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, PyJWTError

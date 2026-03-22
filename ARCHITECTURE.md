@@ -6,23 +6,26 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      API Layer (FastAPI)                     │
+│                      API Layer (FastAPI)                    │
 │  endpoints/ ─→ deps.py ─→ schemas (Request/Response DTOs)   │
+│  ─→ Exception Handlers ─→ Middleware                        │
 └─────────────────────────────────────────────────────────────┘
                             ↓ Depends()
 ┌─────────────────────────────────────────────────────────────┐
-│                   Service Layer (Business Logic)             │
-│  AuthService, UserService, etc. ─→ domain logic, validation  │
+│                   Service Layer (Business Logic)            │
+│  AuthService, UserService, etc. ─→ domain logic, validation │
+│  ─→ raise DomainError (AppError наследники)                 │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                Repository Layer (Data Access)                │
-│  UserRepository, BaseRepository[T] ─→ SQL queries, ORM       │
+│                Repository Layer (Data Access)               │
+│  UserRepository, BaseRepository[T] ─→ SQL queries, ORM      │
+│  ─→ Проброс SQLAlchemy ошибок или RepositoryError           │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                   Database Layer (SQLAlchemy)                │
-│  Models (User, Profile) ─→ Tables, Relationships             │
+│                   Database Layer (SQLAlchemy)               │
+│  Models (User, Profile) ─→ Tables, Relationships            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -130,13 +133,17 @@ async def get_me(current_user: User = Depends(get_current_user)):
 5. Service Layer: AuthService.authenticate(email, password)
    - Проверка учётных данных
    - Логирование
+   - raise InvalidCredentialsError (при ошибке)
          ↓
 6. Repository Layer: UserRepository.get_by_email_with_profile(email)
    - SQL запрос через SQLAlchemy
+   - Проброс SQLAlchemyError (при ошибке БД)
          ↓
 7. Database: PostgreSQL (asyncpg)
          ↓
-8. Response: AuthResponse (tokens + user data)
+8. Exception Handler (если exception)
+         ↓
+9. Response: AuthResponse или Error JSON
 ```
 
 **Диаграмма последовательности:**
@@ -211,38 +218,209 @@ class UserRepository(BaseRepository[User]):
     async def create_with_profile(...) -> User
 ```
 
-### AppError (`src/core/exceptions.py`)
+---
 
-Базовый класс для доменных исключений:
+## Обработка исключений (Exception Handling)
+
+### Иерархия исключений (`src/core/exceptions.py`)
+
+Все доменные исключения наследуются от `AppError` и содержат:
+- `status_code` — HTTP статус ответа
+- `detail` — Человекочитаемое сообщение
+- `error_code` — Машинный код для фронтенд-логики
 
 ```python
 class AppError(Exception):
+    """Базовый класс для всех доменных исключений"""
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
     detail: str = "Internal server error"
+    error_code: str = "INTERNAL_ERROR"
 
-# Примеры наследников
+    def __init__(self, detail: str | None = None) -> None:
+        self.detail = detail or self.__class__.detail
+        super().__init__(self.detail)
+
+
+# ─── Authentication Errors (401, 403) ───
+class AuthenticationError(AppError):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    error_code = "AUTHENTICATION_FAILED"
+
+class InvalidCredentialsError(AuthenticationError):
+    detail = "Invalid email or password"
+
+class InvalidTokenError(AuthenticationError):
+    detail = "Invalid or expired token"
+
+class UserNotActiveError(AppError):
+    status_code = status.HTTP_403_FORBIDDEN
+    detail = "User account is deactivated"
+    error_code = "USER_NOT_ACTIVE"
+
+class PermissionDeniedError(AppError):
+    status_code = status.HTTP_403_FORBIDDEN
+    detail = "Not enough permissions"
+    error_code = "PERMISSION_DENIED"
+
+
+# ─── User Errors (400, 404, 409) ───
+class NotFoundError(AppError):
+    status_code = status.HTTP_404_NOT_FOUND
+    detail = "Resource not found"
+    error_code = "NOT_FOUND"
+
 class UserAlreadyExistsError(AppError):
     status_code = status.HTTP_409_CONFLICT
     detail = "User with this email already exists"
+    error_code = "USER_ALREADY_EXISTS"
 
-class InvalidCredentialsError(AppError):
-    status_code = status.HTTP_401_UNAUTHORIZED
-    detail = "Invalid email or password"
+
+# ─── Repository/Database Errors ───
+class RepositoryError(AppError):
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    error_code = "REPOSITORY_ERROR"
+    detail = "Database operation failed"
 ```
 
-**Глобальный обработчик:**
+### Глобальные обработчики исключений
+
+Регистрируются в [`src/main.py`](./src/main.py) через `setup_exception_handlers(app)`:
+
 ```python
-@app.exception_handler(AppError)
-async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+# src/core/exceptions.py
+
+def setup_exception_handlers(app: FastAPI) -> None:
+
+    @app.exception_handler(AppError)
+    async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
+        """Обработчик доменных исключений"""
+        # Логирование по уровню важности
+        if exc.status_code >= 500:
+            logger.error(f"Server error: {exc.error_code}", detail=exc.detail)
+        else:
+            logger.warning(f"Client error: {exc.error_code}", detail=exc.detail)
+
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": {
+                    "code": exc.error_code,
+                    "message": exc.detail,
+                }
+            }
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(
+        request: Request,
+        exc: RequestValidationError
+    ) -> JSONResponse:
+        """Обработчик валидации Pydantic"""
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Request validation failed",
+                    "details": exc.errors()
+                }
+            }
+        )
+
+    @app.exception_handler(Exception)
+    async def general_exception_handler(
+        request: Request,
+        exc: Exception
+    ) -> JSONResponse:
+        """Fallback для необработанных исключений"""
+        logger.error(f"Unhandled exception: {exc}", exc_info=True)
+
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "Internal server error"
+                }
+            }
+        )
 ```
 
-**Использование в сервисе:**
+### Где и как выбрасывать исключения
+
+| Слой | Что делает | Пример |
+|------|-----------|--------|
+| **Repository** | Пробрасывает SQLAlchemy ошибки или оборачивает в `RepositoryError` | `raise RepositoryError()` при catch SQLAlchemyError |
+| **Service** | **Основное место** для бизнес-исключений | `raise UserAlreadyExistsError()` |
+| **API** | Валидация входных данных, `HTTPException` | `raise HTTPException(status_code=400)` |
+
+**Пример использования в сервисе:**
+
 ```python
+# src/services/auth.py
+
 async def register_new_user(self, user_in: UserCreate) -> AuthResponse:
     if await self.user_repo.email_exists(user_in.email):
         raise UserAlreadyExistsError()  # → 409 Conflict
-    ...
+
+    # ... создание пользователя
+    return AuthResponse(...)
+
+async def authenticate(self, email: str, password: str) -> AuthResponse:
+    user = await self.user_repo.get_by_email_with_profile(email)
+
+    if not user or not verify_password(password, user.hashed_password):
+        raise InvalidCredentialsError()  # → 401 Unauthorized
+
+    if not user.is_active:
+        raise UserNotActiveError()  # → 403 Forbidden
+
+    return AuthResponse(...)
+```
+
+**Пример обработки в repository:**
+
+```python
+# src/repositories/base.py
+
+from sqlalchemy.exc import SQLAlchemyError
+
+async def get(self, obj_id: UUID) -> ModelType | None:
+    try:
+        return await self.db.get(self.model, obj_id)
+    except SQLAlchemyError as e:
+        logger.error(f"Database error: {e}")
+        raise RepositoryError() from e
+    # ← Не ловим молча, пробрасываем выше
+```
+
+### Формат ответа при ошибке
+
+```json
+// ✅ Успешный ответ
+{
+    "access_token": "...",
+    "refresh_token": "...",
+    "token_type": "bearer",
+    "user": {...}
+}
+
+// ❌ Ошибка (AppError)
+{
+    "error": {
+        "code": "USER_ALREADY_EXISTS",
+        "message": "User with this email already exists"
+    }
+}
+
+// ❌ Ошибка валидации (422)
+{
+    "error": {
+        "code": "VALIDATION_ERROR",
+        "message": "Request validation failed",
+        "details": [...]
+    }
+}
 ```
 
 ---
@@ -326,3 +504,80 @@ settings.DEBUG  # True/False
 settings.DATABASE_URL  # "postgresql+asyncpg://..."
 settings.cors_origins_list  # распарсенный список из CORS_ORIGINS
 ```
+
+---
+
+## Best Practices: Исключения
+
+### ✅ DO (Правильно)
+
+```python
+# 1. Выбрасывать исключения в Service Layer
+async def register(self, user_in: UserCreate):
+    if await self.repo.email_exists(user_in.email):
+        raise UserAlreadyExistsError()
+
+# 2. Логировать в exception handlers
+@app.exception_handler(AppError)
+async def handler(request, exc):
+    logger.warning(f"{exc.error_code}: {exc.detail}")
+    return JSONResponse(...)
+
+# 3. Использовать error_code для фронтенда
+raise InvalidCredentialsError()  # → error_code: "AUTHENTICATION_FAILED"
+
+# 4. Пробрасывать ошибки БД из repository
+async def get(self, id: UUID):
+    return await self.db.get(self.model, id)  # ← SQLAlchemyError пробрасывается
+```
+
+### ❌ DON'T (Неправильно)
+
+```python
+# 1. Не ловить исключения молча в repository
+async def get(self, id: UUID):
+    try:
+        return await self.db.get(self.model, id)
+    except:
+        return None  # ← Скрываем ошибку!
+
+# 2. Не использовать HTTPException в сервисе
+async def register(self, user_in: UserCreate):
+    raise HTTPException(409, "Exists")  # ← Нарушает слоистость!
+
+# 3. Не возвращать detail из БД клиенту
+except SQLAlchemyError as e:
+    raise AppError(detail=str(e))  # ← Утечка информации!
+
+# 4. Не создавать исключения в endpoint
+@router.post("/register")
+async def register(user: UserCreate):
+    if exists:
+        raise AppError()  # ← Логика должна быть в сервисе!
+```
+
+---
+
+## Структура проекта (exceptions)
+
+```
+src/
+├── core/
+│   ├── exceptions.py          # ← Все исключения + handlers
+│   ├── config.py
+│   └── security.py
+├── api/
+│   └── v1/
+│       ├── endpoints/
+│       ├── deps.py
+│       └── app.py
+├── services/
+│   ├── auth.py                # ← raise DomainError
+│   └── user.py
+├── repositories/
+│   ├── base.py                # ← Проброс или RepositoryError
+│   └── user.py
+└── main.py                    # ← setup_exception_handlers(app)
+```
+
+**Главное правило:** Исключения определяются в `core`, выбрасываются в `service`, обрабатываются в `api`. Repository только пробрасывает или оборачивает в `RepositoryError`.

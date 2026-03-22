@@ -1,9 +1,14 @@
 from uuid import UUID
 
+import structlog
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.exceptions import RepositoryError
 from src.db.base import Base
+
+logger = structlog.get_logger()
 
 
 class BaseRepository[ModelType: Base]:
@@ -25,21 +30,38 @@ class BaseRepository[ModelType: Base]:
 
     async def get(self, obj_id: UUID) -> ModelType | None:
         """Получить объект по первичному ключу."""
-        return await self.db.get(self.model, obj_id)
+        try:
+            return await self.db.get(self.model, obj_id)
+        except SQLAlchemyError as e:
+            logger.error(f"Database error while getting {self.model.__name__}", error=str(e))
+            raise RepositoryError() from e
 
     async def get_all(self, *, limit: int = 100, offset: int = 0) -> list[ModelType]:
         """Получить список объектов с пагинацией."""
-        result = await self.db.execute(select(self.model).limit(limit).offset(offset))
-        return list(result.scalars().all())
+        try:
+            result = await self.db.execute(select(self.model).limit(limit).offset(offset))
+            return list(result.scalars().all())
+        except SQLAlchemyError as e:
+            logger.error(f"Database error while getting all {self.model.__name__}", error=str(e))
+            raise RepositoryError() from e
 
     async def exists(self, obj_id: UUID) -> bool:
         """Проверить существование объекта по ID."""
-        result = await self.db.execute(
-            select(self.model.id).where(self.model.id == obj_id)  # type: ignore[attr-defined]
-        )
-        return result.scalar_one_or_none() is not None
+        try:
+            result = await self.db.execute(
+                select(self.model.id).where(self.model.id == obj_id)  # type: ignore[attr-defined]
+            )
+            return result.scalar_one_or_none() is not None
+        except SQLAlchemyError as e:
+            logger.error("Database error while checking existence", error=str(e))
+            raise RepositoryError() from e
 
     async def delete(self, obj: ModelType) -> None:
         """Удалить объект из БД."""
-        await self.db.delete(obj)
-        await self.db.commit()
+        try:
+            await self.db.delete(obj)
+            await self.db.commit()
+        except SQLAlchemyError as e:
+            logger.error(f"Database error while deleting {self.model.__name__}", error=str(e))
+            await self.db.rollback()
+            raise RepositoryError() from e

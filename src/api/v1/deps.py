@@ -3,7 +3,9 @@ import uuid
 import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.core.config import settings
 from src.core.security import decode_token
@@ -12,6 +14,8 @@ from src.models.enums import UserRole
 from src.models.user import User
 from src.repositories.user import UserRepository
 from src.services.auth import AuthService
+from src.services.user import UserService
+from src.utils.cache import token_blacklist
 
 logger = structlog.get_logger()
 
@@ -29,6 +33,12 @@ def get_auth_service(
     user_repo: UserRepository = Depends(get_user_repository),
 ) -> AuthService:
     return AuthService(user_repo)
+
+
+def get_user_service(
+    user_repo: UserRepository = Depends(get_user_repository),
+) -> UserService:
+    return UserService(user_repo)
 
 
 async def get_current_user(
@@ -49,12 +59,19 @@ async def get_current_user(
     if payload is None:
         raise credentials_exception
 
+    if await token_blacklist.is_blacklisted(token):
+        raise credentials_exception
+
     try:
         user_id = uuid.UUID(payload["sub"])
     except (ValueError, KeyError) as e:
         raise credentials_exception from e
 
-    user = await db.get(User, user_id)
+    result = await db.execute(
+        select(User).options(selectinload(User.profile)).where(User.id == user_id)
+    )
+    user = result.scalar_one_or_none()
+
     if not user:
         raise credentials_exception
 

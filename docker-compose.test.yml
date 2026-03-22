@@ -13,3 +13,14 @@ services:
       interval: 3s
       timeout: 3s
       retries: 5
+
+  test_redis:
+    image: redis:7-alpine
+    container_name: tramplin_test_redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 5

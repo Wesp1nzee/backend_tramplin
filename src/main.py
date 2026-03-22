@@ -1,16 +1,21 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from starlette.responses import Response
 
-from src.api.v1.endpoints.auth import router
+from src.api.v1.endpoints.auth import router as auth_router
+from src.api.v1.endpoints.users import router as users_router
 from src.core.config import settings
 from src.core.exceptions import setup_exception_handlers
+from src.core.init_data import create_default_admin
 from src.db.session import session_manager
-
-# from src.utils.cache import cache_manager
+from src.utils.cache import token_blacklist
+from src.utils.rate_limiter import limiter
 
 logger = structlog.get_logger()
 
@@ -23,14 +28,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     session_manager.init(settings.DATABASE_URL)
 
-    # await cache_manager.connect(settings.VALKEY_URL)
+    await create_default_admin(session_manager)
+
+    await token_blacklist.connect(settings.REDIS_URL)
 
     logger.info("Application started", env=settings.ENVIRONMENT, version="0.1.0")
 
     yield
 
+    await token_blacklist.disconnect()
     await session_manager.close()
-    # await cache_manager.disconnect()
     logger.info("Application shutdown complete")
 
 
@@ -40,24 +47,47 @@ def create_app() -> FastAPI:
         description="Экосистема для студентов и работодателей 'Трамплин'",
         version="0.1.0",
         lifespan=lifespan,
-        docs_url="/api/docs" if settings.DEBUG else None,
-        redoc_url=None,
+        docs_url="/api/docs" if settings.ENABLE_DOCS else None,
+        redoc_url="/api/redoc" if settings.ENABLE_DOCS else None,
+        openapi_url="/api/openapi.json" if settings.ENABLE_DOCS else None,
     )
+
+    if settings.ENABLE_RATE_LIMITING:
+        app.state.limiter = limiter
+        app.add_exception_handler(
+            RateLimitExceeded,
+            _rate_limit_exceeded_handler,  # type: ignore[arg-type]
+        )
 
     # Middlewares
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
+        allow_origins=settings.cors_origins_list,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["Authorization", "Content-Type", "X-Refresh-Token"],
+        expose_headers=["X-Request-ID"],
+        max_age=600,
     )
 
-    # обработчиков кастомных исключений
+    @app.middleware("http")
+    async def set_secure_headers(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
     setup_exception_handlers(app)
 
-    # Подключение роутеров (Версионирование v1)
-    app.include_router(router, prefix=settings.API_V1_STR)
+    app.include_router(auth_router, prefix=settings.API_V1_STR)
+    app.include_router(users_router, prefix=settings.API_V1_STR)
 
     return app
 
@@ -65,11 +95,10 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
-# Эндпоинт для проверки здоровья (Health Check) для Docker/K8s
 @app.get("/health", tags=["System"])
 async def health_check() -> dict[str, str | bool]:
     return {
         "status": "healthy",
         "database": await session_manager.check_health(),
-        # "cache": await cache_manager.check_health()
+        "cache": await token_blacklist.check_health(),
     }

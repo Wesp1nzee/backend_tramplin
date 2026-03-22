@@ -14,6 +14,6 @@ echo "DB is ready!"
 
 
 export ENVIRONMENT=test
-pytest -v -s tests/
+uv run pytest -v -s tests/
 
 docker-compose -f docker-compose.test.yml down
