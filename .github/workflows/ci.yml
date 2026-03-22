@@ -6,9 +6,14 @@ on:
   pull_request:
     branches: [ master ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       test_db:
@@ -25,27 +30,80 @@ jobs:
           --health-timeout 3s
           --health-retries 5
 
+      test_redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 5
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version-file: "pyproject.toml"
+          cache: "uv"
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --all-extras --dev --frozen
 
       - name: Run pre-commit hooks
         uses: pre-commit/action@v3.0.1
         with:
           extra_args: --all-files --verbose
 
+      - name: Run Security Checks (Bandit + pip-audit)
+        run: |
+          uv run bandit -r src/ --skip B105,B106 -q
+          uv run pip-audit
+
       - name: Run Pytest
         env:
-          DATABASE_URL: "postgresql+asyncpg://test_user:test_password@localhost:5433/test_tramplin?ssl=disable"
           ENVIRONMENT: test
-        run: uv run pytest -v -s tests/
+          DEBUG: "False"
+          ENABLE_DOCS: "False"
+          ENABLE_RATE_LIMITING: "False"
+
+          SECRET_KEY: test_secret_key_2026_secure_minimum_32_bytes!!!
+          ALGORITHM: HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES: "15"
+          REFRESH_TOKEN_EXPIRE_MINUTES: "10080"
+          DEFAULT_ADMIN_EMAIL: admin@tramplin.ru
+          DEFAULT_ADMIN_PASSWORD: ChangeMeInProduction123!
+
+          POSTGRES_SERVER: localhost
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_tramplin
+          POSTGRES_PORT: "5433"
+
+          DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5433/test_tramplin?ssl=disable
+
+          REDIS_URL: redis://localhost:6379/0
+
+          CORS_ORIGINS: "http://localhost:3000"
+
+        run: uv run pytest -v -s tests/ --tb=short
+
+      - name: Upload test results (if failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: |
+            .pytest_cache/
+            *.log
+          retention-days: 3
