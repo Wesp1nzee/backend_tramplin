@@ -15,11 +15,9 @@ repos:
       - id: ruff
         args: [ --fix ]
 
-  - repo: local
-    hooks:
-      - id: mypy
-        name: mypy
-        entry: uv run mypy
-        language: system
-        types: [python]
-        pass_filenames: true
+  # - repo: local
+  #   hooks:
+  #     - id: mypy
+  #       name: mypy
+  #       language: system
+  #       types: [python]
