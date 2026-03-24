@@ -5,11 +5,18 @@
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from loguru import Logger, logger
+from loguru import logger
 
 from src.core.config import settings
+
+if TYPE_CHECKING:
+    from loguru import Logger
+else:
+    from typing import Any
+
+    Logger = Any
 
 
 def mask_sensitive_data(record: dict[str, Any]) -> bool:
@@ -193,9 +200,6 @@ def setup_logging() -> None:
 
 
 def get_logger(name: str = __name__) -> Logger:
-    """
-    Получение инстанса логгера для модуля.
-    """
     return logger.bind(name=name)
 
 
