@@ -60,9 +60,9 @@ jobs:
         run: uv sync --all-extras --dev --frozen
 
       - name: Run pre-commit hooks
-        uses: pre-commit/action@v3.0.1
-        with:
-          extra_args: --all-files --verbose
+        run: |
+          uv run pre-commit install
+          uv run pre-commit run --all-files --show-diff-on-failure
 
       - name: Run Security Checks (Bandit + pip-audit)
         run: |
