@@ -34,12 +34,8 @@ class Application(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "applications"
 
-    opportunity_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), index=True
-    )
-    applicant_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("profiles.id", ondelete="CASCADE"), index=True
-    )
+    opportunity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
+    applicant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
 
     status: Mapped[ApplicationStatus] = mapped_column(
         Enum(ApplicationStatus, native_enum=False),
@@ -58,9 +54,7 @@ class Application(Base, UUIDMixin, TimestampMixin):
 
     # История изменений статуса для timeline в ЛК
     # [{"status": "viewed", "changed_at": "2025-...", "changed_by": "employer"}]
-    status_history: Mapped[list[dict[str, str]]] = mapped_column(
-        JSONB, default=list, server_default="[]"
-    )
+    status_history: Mapped[list[dict[str, str]]] = mapped_column(JSONB, default=list, server_default="[]")
 
     # Даты
     viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -91,12 +85,8 @@ class EventRegistration(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "event_registrations"
 
-    opportunity_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), index=True
-    )
-    profile_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("profiles.id", ondelete="CASCADE"), index=True
-    )
+    opportunity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
+    profile_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
 
     # Статус регистрации: confirmed / waitlist / cancelled
     status: Mapped[str] = mapped_column(Text, default="confirmed")
@@ -105,9 +95,7 @@ class EventRegistration(Base, UUIDMixin, TimestampMixin):
     checked_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # Relationships
-    opportunity: Mapped[Opportunity] = relationship(
-        "Opportunity", back_populates="event_registrations"
-    )
+    opportunity: Mapped[Opportunity] = relationship("Opportunity", back_populates="event_registrations")
     profile: Mapped[Profile] = relationship("Profile", back_populates="event_registrations")
 
     __table_args__ = (

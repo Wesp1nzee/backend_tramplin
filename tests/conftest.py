@@ -17,9 +17,7 @@ from src.db.session import get_db
 from src.main import app
 
 app.state.limiter.enabled = False
-TEST_DATABASE_URL = (
-    "postgresql+asyncpg://test_user:test_password@localhost:5433/test_tramplin?ssl=disable"
-)
+TEST_DATABASE_URL = "postgresql+asyncpg://test_user:test_password@localhost:5433/test_tramplin?ssl=disable"
 
 
 @pytest_asyncio.fixture(scope="session")

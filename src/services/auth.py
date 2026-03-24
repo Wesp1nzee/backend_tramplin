@@ -109,12 +109,8 @@ class AuthService:
             refresh_token: Refresh токен для добавления в blacklist
         """
         try:
-            access_payload = jwt_decode(
-                access_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-            )
-            refresh_payload = jwt_decode(
-                refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
-            )
+            access_payload = jwt_decode(access_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            refresh_payload = jwt_decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         except (Exception, DecodeError, ExpiredSignatureError, JWTInvalidTokenError) as e:
             raise InvalidTokenError("Invalid token provided") from e
 

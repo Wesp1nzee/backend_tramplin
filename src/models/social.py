@@ -42,12 +42,8 @@ class Contact(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "contacts"
 
-    requester_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
-    addressee_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    requester_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    addressee_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
     status: Mapped[ContactStatus] = mapped_column(
         Enum(ContactStatus, native_enum=False),
@@ -58,12 +54,8 @@ class Contact(Base, UUIDMixin, TimestampMixin):
     message: Mapped[str | None] = mapped_column(Text)
 
     # Relationships
-    requester: Mapped[User] = relationship(
-        "User", back_populates="sent_contacts", foreign_keys=[requester_id]
-    )
-    addressee: Mapped[User] = relationship(
-        "User", back_populates="received_contacts", foreign_keys=[addressee_id]
-    )
+    requester: Mapped[User] = relationship("User", back_populates="sent_contacts", foreign_keys=[requester_id])
+    addressee: Mapped[User] = relationship("User", back_populates="received_contacts", foreign_keys=[addressee_id])
 
     __table_args__ = (
         # Нельзя дважды отправить запрос одному человеку
@@ -78,12 +70,8 @@ class Favorite(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "favorites"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
-    opportunity_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), index=True
-    )
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    opportunity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
 
     # Пользовательская заметка к сохранённой вакансии
     note: Mapped[str | None] = mapped_column(Text)
@@ -103,12 +91,8 @@ class FavoriteCompany(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "favorite_companies"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("companies.id", ondelete="CASCADE"), index=True
-    )
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), index=True)
 
     # Relationships
     user: Mapped[User] = relationship("User", back_populates="favorite_companies")
@@ -128,26 +112,16 @@ class Recommendation(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "recommendations"
 
-    sender_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("profiles.id", ondelete="CASCADE"), index=True
-    )
-    recipient_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("profiles.id", ondelete="CASCADE"), index=True
-    )
-    opportunity_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), index=True
-    )
+    sender_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    recipient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), index=True)
+    opportunity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), index=True)
 
     message: Mapped[str | None] = mapped_column(Text)
     is_read: Mapped[bool] = mapped_column(default=False)
 
     # Relationships
-    sender: Mapped[Profile] = relationship(
-        "Profile", back_populates="sent_recommendations", foreign_keys=[sender_id]
-    )
-    recipient: Mapped[Profile] = relationship(
-        "Profile", back_populates="received_recommendations", foreign_keys=[recipient_id]
-    )
+    sender: Mapped[Profile] = relationship("Profile", back_populates="sent_recommendations", foreign_keys=[sender_id])
+    recipient: Mapped[Profile] = relationship("Profile", back_populates="received_recommendations", foreign_keys=[recipient_id])
     opportunity: Mapped[Opportunity] = relationship("Opportunity", back_populates="recommendations")
 
     __table_args__ = (Index("ix_recommendations_recipient", "recipient_id", "is_read"),)

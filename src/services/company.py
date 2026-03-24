@@ -207,9 +207,7 @@ class CompanyService:
         # Проверка домена email — предупреждение, не блокировка
         email_domain_verified = False
         if request.website_url:
-            email_domain_verified = self._check_email_domain(
-                request.corporate_email, request.website_url
-            )
+            email_domain_verified = self._check_email_domain(request.corporate_email, request.website_url)
             if not email_domain_verified:
                 pass
 
@@ -252,9 +250,7 @@ class CompanyService:
             raise CompanyNotFoundError(detail="Verification request not found")
 
         existing_links: list[dict[str, str]] = verification.verification_links or []
-        new_links = existing_links + [
-            link for link in request.verification_links if link not in existing_links
-        ]
+        new_links = existing_links + [link for link in request.verification_links if link not in existing_links]
         verification.verification_links = new_links
 
         existing_docs: list[dict[str, str]] = verification.documents or []
@@ -376,8 +372,7 @@ class CompanyService:
             body=(
                 f"Ваша компания «{company.name}» успешно верифицирована."
                 if approve
-                else f"Верификация компании «{company.name}» отклонена. "
-                f"Причина: {comment or 'не указана'}"
+                else f"Верификация компании «{company.name}» отклонена. Причина: {comment or 'не указана'}"
             ),
             payload={"company_id": str(company.id), "status": new_status},
         )

@@ -78,8 +78,7 @@ async def refresh_tokens(
     status_code=status.HTTP_200_OK,
     summary="Выход из системы",
     description=(
-        "Выход из системы с инвалидацией токенов через Redis blacklist. "
-        "Требует передачи access и refresh токенов в заголовках."
+        "Выход из системы с инвалидацией токенов через Redis blacklist. Требует передачи access и refresh токенов в заголовках."
     ),
 )
 async def logout(

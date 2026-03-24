@@ -51,15 +51,15 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=True,
+        include_object=lambda obj, name, type_, reflected, compare_to: name not in ("topology", "layer", "spatial_ref_sys"),
     )
 
     with context.begin_transaction():
         context.run_migrations()
 
 
-def include_object(
-    object: SchemaItem, name: str | None, type_: str, reflected: bool, compare_to: SchemaItem | None
-) -> bool:
+def include_object(object: SchemaItem, name: str | None, type_: str, reflected: bool, compare_to: SchemaItem | None) -> bool:
     postgis_tables = {
         "spatial_ref_sys",
         "topology",
@@ -119,9 +119,7 @@ def include_object(
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(
-        connection=connection, target_metadata=target_metadata, include_object=include_object
-    )
+    context.configure(connection=connection, target_metadata=target_metadata, include_object=include_object)
     with context.begin_transaction():
         context.run_migrations()
 

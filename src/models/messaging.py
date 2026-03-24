@@ -45,9 +45,7 @@ class Conversation(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "conversations"
 
     # Контекст диалога (необязательно)
-    opportunity_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="SET NULL"), index=True
-    )
+    opportunity_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("opportunities.id", ondelete="SET NULL"), index=True)
 
     # Денормализованные счётчики для быстрого рендера списка диалогов
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -79,12 +77,8 @@ class ConversationParticipant(Base, TimestampMixin):
 
     __tablename__ = "conversation_participants"
 
-    conversation_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True
-    )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
-    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
 
     unread_count: Mapped[int] = mapped_column(Integer, default=0)
     is_muted: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -112,12 +106,8 @@ class Message(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "messages"
 
-    conversation_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
-    )
-    sender_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    conversation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("conversations.id", ondelete="CASCADE"), index=True)
+    sender_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
     content: Mapped[str] = mapped_column(Text, nullable=False)
 
@@ -130,9 +120,7 @@ class Message(Base, UUIDMixin, TimestampMixin):
     message_type: Mapped[str] = mapped_column(Text, default="text")
 
     # Ответ на другое сообщение (threading)
-    reply_to_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("messages.id", ondelete="SET NULL")
-    )
+    reply_to_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("messages.id", ondelete="SET NULL"))
 
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -146,9 +134,7 @@ class Message(Base, UUIDMixin, TimestampMixin):
     attachments: Mapped[list[MessageAttachment]] = relationship(
         "MessageAttachment", back_populates="message", cascade="all, delete-orphan"
     )
-    reply_to: Mapped[Message | None] = relationship(
-        "Message", remote_side="Message.id", foreign_keys=[reply_to_id]
-    )
+    reply_to: Mapped[Message | None] = relationship("Message", remote_side="Message.id", foreign_keys=[reply_to_id])
 
     __table_args__ = (
         Index("ix_messages_conversation_created", "conversation_id", "created_at"),
@@ -170,9 +156,7 @@ class MessageAttachment(Base, UUIDMixin):
 
     __tablename__ = "message_attachments"
 
-    message_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("messages.id", ondelete="CASCADE"), index=True
-    )
+    message_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("messages.id", ondelete="CASCADE"), index=True)
 
     # Тип вложения: "file" | "image" | "link"
     attachment_type: Mapped[str] = mapped_column(Text, nullable=False)

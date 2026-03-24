@@ -30,16 +30,12 @@ class User(Base, UUIDMixin, TimestampMixin):
 
     email: Mapped[str] = mapped_column(Text, unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(Text, nullable=False)
-    role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, native_enum=False), default=UserRole.APPLICANT, index=True
-    )
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole, native_enum=False), default=UserRole.APPLICANT, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships
-    profile: Mapped[Profile] = relationship(
-        "Profile", back_populates="user", uselist=False, cascade="all, delete-orphan"
-    )
+    profile: Mapped[Profile] = relationship("Profile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     company: Mapped[Company] = relationship(
         "Company",
         back_populates="owner",
@@ -47,9 +43,7 @@ class User(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
         foreign_keys="Company.owner_id",
     )
-    sent_messages: Mapped[list[Message]] = relationship(
-        "Message", back_populates="sender", foreign_keys="Message.sender_id"
-    )
+    sent_messages: Mapped[list[Message]] = relationship("Message", back_populates="sender", foreign_keys="Message.sender_id")
     notifications: Mapped[list[Notification]] = relationship(
         "Notification", back_populates="recipient", cascade="all, delete-orphan"
     )
@@ -67,9 +61,7 @@ class User(Base, UUIDMixin, TimestampMixin):
         cascade="all, delete-orphan",
     )
     # Избранные вакансии (для авторизованных)
-    favorites: Mapped[list[Favorite]] = relationship(
-        "Favorite", back_populates="user", cascade="all, delete-orphan"
-    )
+    favorites: Mapped[list[Favorite]] = relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
     favorite_companies: Mapped[list[FavoriteCompany]] = relationship(
         "FavoriteCompany", back_populates="user", cascade="all, delete-orphan"
     )
@@ -97,9 +89,7 @@ class Profile(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "profiles"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), unique=True
-    )
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
 
     first_name: Mapped[str] = mapped_column(Text, index=True)
     last_name: Mapped[str] = mapped_column(Text, index=True)
@@ -141,17 +131,12 @@ class Profile(Base, UUIDMixin, TimestampMixin):
             "show_github": True,
             "show_applications": False,
         },
-        server_default=(
-            '{"public_profile": true, "show_contacts": false, '
-            '"show_github": true, "show_applications": false}'
-        ),
+        server_default=('{"public_profile": true, "show_contacts": false, "show_github": true, "show_applications": false}'),
     )
 
     # Карьерные предпочтения (для умного матчинга)
     # Пример: {"opportunity_types": ["internship", "vacancy"], "work_formats": ["remote", "hybrid"]}
-    career_preferences: Mapped[dict[str, str]] = mapped_column(
-        JSONB, default=dict, server_default="{}"
-    )
+    career_preferences: Mapped[dict[str, str]] = mapped_column(JSONB, default=dict, server_default="{}")
 
     # Relationships
     user: Mapped[User] = relationship("User", back_populates="profile")

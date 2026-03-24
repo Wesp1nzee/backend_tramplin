@@ -23,9 +23,7 @@ class TimestampMixin:
 
     @declared_attr
     def updated_at(self) -> Mapped[datetime]:
-        return mapped_column(
-            DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-        )
+        return mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class UUIDMixin:

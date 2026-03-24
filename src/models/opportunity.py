@@ -57,13 +57,9 @@ class Tag(Base, UUIDMixin, TimestampMixin):
     is_approved: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
 
-    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL")
-    )
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
-    opportunity_tags: Mapped[list[OpportunityTag]] = relationship(
-        "OpportunityTag", back_populates="tag"
-    )
+    opportunity_tags: Mapped[list[OpportunityTag]] = relationship("OpportunityTag", back_populates="tag")
 
 
 class Opportunity(Base, UUIDMixin, TimestampMixin):
@@ -77,9 +73,7 @@ class Opportunity(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "opportunities"
 
-    company_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("companies.id", ondelete="CASCADE"), index=True
-    )
+    company_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), index=True)
 
     # Основная информация
     title: Mapped[str] = mapped_column(Text, nullable=False, index=True)
@@ -95,12 +89,8 @@ class Opportunity(Base, UUIDMixin, TimestampMixin):
 
     # Формат и условия
     work_format: Mapped[WorkFormat] = mapped_column(Enum(WorkFormat, native_enum=False), index=True)
-    employment_type: Mapped[EmploymentType | None] = mapped_column(
-        Enum(EmploymentType, native_enum=False)
-    )
-    experience_level: Mapped[ExperienceLevel | None] = mapped_column(
-        Enum(ExperienceLevel, native_enum=False)
-    )
+    employment_type: Mapped[EmploymentType | None] = mapped_column(Enum(EmploymentType, native_enum=False))
+    experience_level: Mapped[ExperienceLevel | None] = mapped_column(Enum(ExperienceLevel, native_enum=False))
 
     # Зарплата
     salary_min: Mapped[int | None] = mapped_column(Integer)
@@ -114,9 +104,7 @@ class Opportunity(Base, UUIDMixin, TimestampMixin):
     # PostGIS точка — тот же тип что в Company для единообразия запросов.
     # Для REMOTE/ONLINE вакансий — точка города работодателя.
     # Для OFFICE/HYBRID — точный адрес офиса.
-    location: Mapped[object | None] = mapped_column(
-        Geography(geometry_type="POINT", srid=4326), nullable=True
-    )
+    location: Mapped[object | None] = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
 
     # Даты
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -148,9 +136,7 @@ class Opportunity(Base, UUIDMixin, TimestampMixin):
 
     # Модерация куратором
     is_moderated: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    moderated_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL")
-    )
+    moderated_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     moderation_comment: Mapped[str | None] = mapped_column(Text)
 
     # Relationships
@@ -164,9 +150,7 @@ class Opportunity(Base, UUIDMixin, TimestampMixin):
     applications: Mapped[list[Application]] = relationship(
         "Application", back_populates="opportunity", cascade="all, delete-orphan"
     )
-    favorites: Mapped[list[Favorite]] = relationship(
-        "Favorite", back_populates="opportunity", cascade="all, delete-orphan"
-    )
+    favorites: Mapped[list[Favorite]] = relationship("Favorite", back_populates="opportunity", cascade="all, delete-orphan")
     event_registrations: Mapped[list[EventRegistration]] = relationship(
         "EventRegistration", back_populates="opportunity", cascade="all, delete-orphan"
     )
@@ -197,16 +181,10 @@ class OpportunityTag(Base, TimestampMixin):
 
     __tablename__ = "opportunity_tags"
 
-    opportunity_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), primary_key=True
-    )
-    tag_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
-    )
+    opportunity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), primary_key=True)
+    tag_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True)
 
-    opportunity: Mapped[Opportunity] = relationship(
-        "Opportunity", back_populates="opportunity_tags"
-    )
+    opportunity: Mapped[Opportunity] = relationship("Opportunity", back_populates="opportunity_tags")
     tag: Mapped[Tag] = relationship("Tag", back_populates="opportunity_tags")
 
     __table_args__ = (
@@ -224,18 +202,12 @@ class OpportunitySkill(Base, TimestampMixin):
 
     __tablename__ = "opportunity_skills"
 
-    opportunity_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("opportunities.id", ondelete="CASCADE"), primary_key=True
-    )
-    skill_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True
-    )
+    opportunity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("opportunities.id", ondelete="CASCADE"), primary_key=True)
+    skill_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True)
     # Обязательный или желательный навык
     is_required: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    opportunity: Mapped[Opportunity] = relationship(
-        "Opportunity", back_populates="opportunity_skills"
-    )
+    opportunity: Mapped[Opportunity] = relationship("Opportunity", back_populates="opportunity_skills")
     skill: Mapped[Skill] = relationship("Skill", back_populates="opportunity_skills")
 
     __table_args__ = (

@@ -88,9 +88,7 @@ class DadataService:
         except httpx.TimeoutException as e:
             raise ExternalServiceError("Dadata API timeout. Please try again later.") from e
         except httpx.HTTPStatusError as e:
-            raise ExternalServiceError(
-                f"Dadata API returned error: {e.response.status_code}"
-            ) from e
+            raise ExternalServiceError(f"Dadata API returned error: {e.response.status_code}") from e
         except httpx.RequestError as e:
             raise ExternalServiceError("Cannot connect to Dadata API") from e
 
@@ -130,11 +128,7 @@ class DadataService:
         if is_individual:
             display_name = suggestion.get("value", "")
         else:
-            display_name = (
-                name.get("short_with_opf")
-                or name.get("full_with_opf")
-                or suggestion.get("value", "")
-            )
+            display_name = name.get("short_with_opf") or name.get("full_with_opf") or suggestion.get("value", "")
 
         return InnLookupResult(
             inn=data.get("inn", ""),
@@ -158,11 +152,7 @@ class DadataService:
     def _extract_city(address: dict[str, Any]) -> str | None:
         """Вытаскивает название города из гранулярного адреса Dadata."""
         addr_data: dict[str, Any] = address.get("data") or {}
-        return (
-            addr_data.get("city")
-            or addr_data.get("settlement")
-            or addr_data.get("region_with_type")
-        )
+        return addr_data.get("city") or addr_data.get("settlement") or addr_data.get("region_with_type")
 
 
 # Синглтон — переиспользуется между запросами

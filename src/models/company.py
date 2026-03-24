@@ -40,9 +40,7 @@ class Company(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "companies"
 
-    owner_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), unique=True
-    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
 
     # Основная информация
     name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -63,9 +61,7 @@ class Company(Base, UUIDMixin, TimestampMixin):
     # PostGIS GEOGRAPHY(Point, 4326) — WGS-84, расстояния в метрах.
     # Пример: ST_DWithin(location, ST_MakePoint(:lon, :lat)::geography, 5000)
     # Создаётся из фронта: ST_MakePoint(longitude, latitude)
-    location: Mapped[object | None] = mapped_column(
-        Geography(geometry_type="POINT", srid=4326), nullable=True
-    )
+    location: Mapped[object | None] = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
 
     # Медиа
     logo_url: Mapped[str | None] = mapped_column(Text)
@@ -85,9 +81,7 @@ class Company(Base, UUIDMixin, TimestampMixin):
         default=VerificationStatus.PENDING,
     )
     verified_at: Mapped[uuid.UUID | None] = mapped_column()  # timestamp stored as datetime
-    verified_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL")
-    )
+    verified_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -96,9 +90,7 @@ class Company(Base, UUIDMixin, TimestampMixin):
     verification_requests: Mapped[list[CompanyVerification]] = relationship(
         "CompanyVerification", back_populates="company", cascade="all, delete-orphan"
     )
-    opportunities: Mapped[list[Opportunity]] = relationship(
-        "Opportunity", back_populates="company", cascade="all, delete-orphan"
-    )
+    opportunities: Mapped[list[Opportunity]] = relationship("Opportunity", back_populates="company", cascade="all, delete-orphan")
     reviews: Mapped[list[Review]] = relationship(
         "Review",
         back_populates="company",
@@ -153,19 +145,13 @@ class CompanyVerification(Base, UUIDMixin, TimestampMixin):
 
     # Документы и ссылки
     # [{"type": "linkedin", "url": "..."}, {"type": "hh", "url": "..."}]
-    verification_links: Mapped[list[dict[str, str]]] = mapped_column(
-        JSONB, default=list, server_default="[]"
-    )
+    verification_links: Mapped[list[dict[str, str]]] = mapped_column(JSONB, default=list, server_default="[]")
     # Загруженные документы (URL к хранилищу)
-    documents: Mapped[list[dict[str, str]]] = mapped_column(
-        JSONB, default=list, server_default="[]"
-    )
+    documents: Mapped[list[dict[str, str]]] = mapped_column(JSONB, default=list, server_default="[]")
 
     # Комментарий куратора
     curator_comment: Mapped[str | None] = mapped_column(Text)
-    reviewed_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL")
-    )
+    reviewed_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
     # Relationships
     company: Mapped[Company] = relationship("Company", back_populates="verification_requests")

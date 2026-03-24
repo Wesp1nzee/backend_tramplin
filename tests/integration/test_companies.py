@@ -115,9 +115,7 @@ def make_ip_result(inn: str = "784806113663") -> InnLookupResult:
 
 
 @pytest.mark.asyncio
-async def test_verify_inn_success(
-    client: AsyncClient, fake_redis: fakeredis.aioredis.FakeRedis
-) -> None:
+async def test_verify_inn_success(client: AsyncClient, fake_redis: fakeredis.aioredis.FakeRedis) -> None:
     """
     Успешная проверка ИНН: Dadata возвращает активную компанию.
     Ответ содержит данные компании и session_token.
@@ -148,9 +146,7 @@ async def test_verify_inn_success(
 
 
 @pytest.mark.asyncio
-async def test_verify_inn_individual(
-    client: AsyncClient, fake_redis: fakeredis.aioredis.FakeRedis
-) -> None:
+async def test_verify_inn_individual(client: AsyncClient, fake_redis: fakeredis.aioredis.FakeRedis) -> None:
     """
     ИП: ИНН из 12 цифр, is_individual=True.
     """
@@ -569,9 +565,7 @@ async def registered_company(
         return_value=dadata_result,
     ):
         with patch("src.utils.cache.token_blacklist._redis", fake_redis):
-            verify_resp = await client.post(
-                "/api/v1/companies/verify-inn", json={"inn": "6666666666"}
-            )
+            verify_resp = await client.post("/api/v1/companies/verify-inn", json={"inn": "6666666666"})
             session_token = verify_resp.json()["session_token"]
 
             reg_resp = await client.post(
@@ -895,9 +889,7 @@ async def test_resubmit_after_rejection(
         "/api/v1/companies/me/documents",
         json={
             "verification_links": [{"type": "hh", "url": "https://hh.ru/employer/999"}],
-            "documents": [
-                {"type": "license", "url": "https://s3.example.com/lic.pdf", "name": "Лицензия"}
-            ],
+            "documents": [{"type": "license", "url": "https://s3.example.com/lic.pdf", "name": "Лицензия"}],
         },
         headers={"Authorization": f"Bearer {employer_token}"},
     )
@@ -993,9 +985,7 @@ async def test_email_domain_match_recorded(
         return_value=dadata_result,
     ):
         with patch("src.utils.cache.token_blacklist._redis", fake_redis):
-            verify_resp = await client.post(
-                "/api/v1/companies/verify-inn", json={"inn": "1111222233"}
-            )
+            verify_resp = await client.post("/api/v1/companies/verify-inn", json={"inn": "1111222233"})
             session_token = verify_resp.json()["session_token"]
 
             reg_resp = await client.post(
@@ -1046,9 +1036,7 @@ async def test_email_domain_mismatch_does_not_block(
         return_value=dadata_result,
     ):
         with patch("src.utils.cache.token_blacklist._redis", fake_redis):
-            verify_resp = await client.post(
-                "/api/v1/companies/verify-inn", json={"inn": "3333444455"}
-            )
+            verify_resp = await client.post("/api/v1/companies/verify-inn", json={"inn": "3333444455"})
             session_token = verify_resp.json()["session_token"]
 
             reg_resp = await client.post(

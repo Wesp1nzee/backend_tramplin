@@ -104,9 +104,7 @@ async def test_change_password(client: AsyncClient) -> None:
         "new_password": "NewPassw0rd_456!",
     }
 
-    response = await client.post(
-        "/api/v1/users/me/change-password", json=change_data, headers=headers
-    )
+    response = await client.post("/api/v1/users/me/change-password", json=change_data, headers=headers)
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["message"] == "Password changed successfully"
 
@@ -141,9 +139,7 @@ async def test_change_password_invalid_old(client: AsyncClient) -> None:
         "new_password": "NewPassw0rd_456!",
     }
 
-    response = await client.post(
-        "/api/v1/users/me/change-password", json=change_data, headers=headers
-    )
+    response = await client.post("/api/v1/users/me/change-password", json=change_data, headers=headers)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -198,9 +194,7 @@ async def test_password_reset_confirm(client: AsyncClient, db_session: AsyncSess
     from src.core.security import _create_token
     from src.models.user import User
 
-    result = await db_session.execute(
-        select(User).where(User.email == "test_reset_confirm@example.com")
-    )
+    result = await db_session.execute(select(User).where(User.email == "test_reset_confirm@example.com"))
     user = result.scalar_one_or_none()
 
     if user:

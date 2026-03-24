@@ -61,7 +61,6 @@ async def create_default_admin(session_manager: SessionManager) -> None:
                     middle_name=None,
                     university=None,
                     graduation_year=None,
-                    skills=[],
                     social_links={},
                     privacy_settings={
                         "public_profile": True,

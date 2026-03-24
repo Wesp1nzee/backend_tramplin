@@ -6,7 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", case_sensitive=True
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     PROJECT_NAME: str = "Tramplin API"
@@ -21,12 +23,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15  # 15 минут
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 дней
 
-    DEFAULT_ADMIN_EMAIL: str = Field(
-        default="admin@tramplin.ru", description="Email администратора по умолчанию"
-    )
-    DEFAULT_ADMIN_PASSWORD: str = Field(
-        ..., description="Пароль администратора по умолчанию (требуется в prod)"
-    )
+    DEFAULT_ADMIN_EMAIL: str = Field(default="admin@tramplin.ru", description="Email администратора по умолчанию")
+    DEFAULT_ADMIN_PASSWORD: str = Field(..., description="Пароль администратора по умолчанию (требуется в prod)")
 
     CORS_ORIGINS: str = ""
 
@@ -54,9 +52,7 @@ class Settings(BaseSettings):
         if not self.CORS_ORIGINS or not self.CORS_ORIGINS.strip():
             return ["http://localhost:3000"]
 
-        origins = [
-            origin.strip().rstrip("/") for origin in self.CORS_ORIGINS.split(",") if origin.strip()
-        ]
+        origins = [origin.strip().rstrip("/") for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
         return origins if origins else ["http://localhost:3000"]
 
     POSTGRES_SERVER: str

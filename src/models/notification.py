@@ -48,9 +48,7 @@ class Notification(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "notifications"
 
-    recipient_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    recipient_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
     type: Mapped[NotificationType] = mapped_column(Enum(NotificationType, native_enum=False))
 
@@ -85,14 +83,10 @@ class Review(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "reviews"
 
-    author_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    author_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
     # Полиморфная связь: компания или вакансия
-    target_type: Mapped[ReviewTarget] = mapped_column(
-        Enum(ReviewTarget, native_enum=False), index=True
-    )
+    target_type: Mapped[ReviewTarget] = mapped_column(Enum(ReviewTarget, native_enum=False), index=True)
     target_id: Mapped[uuid.UUID] = mapped_column(index=True)
 
     # Основной рейтинг (1-5)
@@ -115,9 +109,7 @@ class Review(Base, UUIDMixin, TimestampMixin):
     # Модерация
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False)
-    moderated_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL")
-    )
+    moderated_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     moderation_comment: Mapped[str | None] = mapped_column(Text)
 
     # Relationships

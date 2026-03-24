@@ -31,11 +31,7 @@ class UserRepository(BaseRepository[User]):
         try:
             result = await self.db.execute(
                 select(User)
-                .options(
-                    selectinload(User.profile)
-                    .selectinload(Profile.profile_skills)
-                    .selectinload(ProfileSkill.skill)
-                )
+                .options(selectinload(User.profile).selectinload(Profile.profile_skills).selectinload(ProfileSkill.skill))
                 .where(User.id == user_id)
             )
             return result.scalar_one_or_none()
@@ -45,9 +41,7 @@ class UserRepository(BaseRepository[User]):
     async def get_by_email_with_profile(self, email: str) -> User | None:
         """Найти пользователя по email вместе с профилем."""
         try:
-            result = await self.db.execute(
-                select(User).options(selectinload(User.profile)).where(User.email == email)
-            )
+            result = await self.db.execute(select(User).options(selectinload(User.profile)).where(User.email == email))
             return result.scalar_one_or_none()
         except SQLAlchemyError as e:
             raise RepositoryError() from e

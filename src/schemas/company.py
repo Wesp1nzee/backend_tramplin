@@ -91,9 +91,7 @@ class CompanyRegisterRequest(SchemaBase):
     inn: str = Field(..., description="ИНН — должен совпадать с токеном сессии")
     session_token: str | None = Field(
         None,
-        description=(
-            "Токен из POST /verify-inn. Если не передан — ИНН перепроверяется через Dadata."
-        ),
+        description=("Токен из POST /verify-inn. Если не передан — ИНН перепроверяется через Dadata."),
     )
     corporate_email: str = Field(..., description="Корпоративный email")
     website_url: str | None = None
@@ -130,10 +128,7 @@ class CompanyDocumentsRequest(SchemaBase):
 
     verification_links: list[dict[str, str]] = Field(
         default_factory=list,
-        description=(
-            "Ссылки для верификации.\n"
-            'Форматы: {"type": "hh"|"linkedin"|"website"|"other", "url": "..."}'
-        ),
+        description=('Ссылки для верификации.\nФорматы: {"type": "hh"|"linkedin"|"website"|"other", "url": "..."}'),
         examples=[
             [
                 {"type": "hh", "url": "https://hh.ru/employer/3529"},

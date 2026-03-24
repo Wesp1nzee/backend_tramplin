@@ -74,9 +74,7 @@ async def get_current_user(
     except (ValueError, KeyError) as e:
         raise credentials_exception from e
 
-    result = await db.execute(
-        select(User).options(selectinload(User.profile)).where(User.id == user_id)
-    )
+    result = await db.execute(select(User).options(selectinload(User.profile)).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:

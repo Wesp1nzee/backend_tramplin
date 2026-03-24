@@ -106,11 +106,7 @@ class UserService:
 
         result = await self.user_repo.db.execute(
             select(User)
-            .options(
-                selectinload(User.profile)
-                .selectinload(Profile.profile_skills)
-                .selectinload(ProfileSkill.skill)
-            )
+            .options(selectinload(User.profile).selectinload(Profile.profile_skills).selectinload(ProfileSkill.skill))
             .where(User.id == user_uuid)
         )
         updated_user = result.scalar_one_or_none()
@@ -143,18 +139,14 @@ class UserService:
         # Remove old skills using delete
         if skills_to_remove:
             # Get skill IDs to remove
-            skills_to_remove_objs = [
-                ps for ps in profile.profile_skills if ps.skill.name in skills_to_remove
-            ]
+            skills_to_remove_objs = [ps for ps in profile.profile_skills if ps.skill.name in skills_to_remove]
             for ps in skills_to_remove_objs:
                 await self.user_repo.db.delete(ps)
 
         # Add new skills
         if skills_to_add:
             # Get or create skills
-            result = await self.user_repo.db.execute(
-                select(Skill).where(Skill.name.in_(skills_to_add))
-            )
+            result = await self.user_repo.db.execute(select(Skill).where(Skill.name.in_(skills_to_add)))
             existing_skills = result.scalars().all()
             existing_skill_map = {s.name: s for s in existing_skills}
 
@@ -172,9 +164,7 @@ class UserService:
                 await self.user_repo.db.flush()
 
                 # Reload to get the newly created skills with IDs
-                result = await self.user_repo.db.execute(
-                    select(Skill).where(Skill.name.in_(skills_to_create))
-                )
+                result = await self.user_repo.db.execute(select(Skill).where(Skill.name.in_(skills_to_create)))
                 for skill in result.scalars().all():
                     existing_skill_map[skill.name] = skill
 

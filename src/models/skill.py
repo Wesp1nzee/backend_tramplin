@@ -50,15 +50,11 @@ class Skill(Base, UUIDMixin, TimestampMixin):
     usage_count: Mapped[int] = mapped_column(Integer, default=0)
 
     # Кто добавил навык (NULL = системный)
-    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL")
-    )
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
 
     # Relationships
     user_skills: Mapped[list[ProfileSkill]] = relationship("ProfileSkill", back_populates="skill")
-    opportunity_skills: Mapped[list[OpportunitySkill]] = relationship(
-        "OpportunitySkill", back_populates="skill"
-    )
+    opportunity_skills: Mapped[list[OpportunitySkill]] = relationship("OpportunitySkill", back_populates="skill")
 
     __table_args__ = (
         Index("ix_skills_category", "category"),
@@ -79,12 +75,8 @@ class ProfileSkill(Base, TimestampMixin):
 
     __tablename__ = "profile_skills"
 
-    profile_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True
-    )
-    skill_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True
-    )
+    profile_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("profiles.id", ondelete="CASCADE"), primary_key=True)
+    skill_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True)
     # Уровень владения (1=базовый, 2=средний, 3=продвинутый, 4=эксперт)
     proficiency_level: Mapped[int] = mapped_column(Integer, default=1)
     years_experience: Mapped[float | None] = mapped_column()
