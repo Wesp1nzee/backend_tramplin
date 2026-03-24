@@ -13,13 +13,10 @@ Dadata API: https://dadata.ru/api/find-party/
 from typing import Any
 
 import httpx
-import structlog
 
 from src.core.config import settings
 from src.core.exceptions import AppError, ExternalServiceError
 from src.schemas.company import InnLookupResult
-
-logger = structlog.get_logger()
 
 DADATA_FIND_BY_ID_URL = "https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party"
 
@@ -89,27 +86,18 @@ class DadataService:
                 )
                 response.raise_for_status()
         except httpx.TimeoutException as e:
-            logger.error("Dadata API timeout", inn=inn)
             raise ExternalServiceError("Dadata API timeout. Please try again later.") from e
         except httpx.HTTPStatusError as e:
-            logger.error(
-                "Dadata API HTTP error",
-                inn=inn,
-                status_code=e.response.status_code,
-                body=e.response.text,
-            )
             raise ExternalServiceError(
                 f"Dadata API returned error: {e.response.status_code}"
             ) from e
         except httpx.RequestError as e:
-            logger.error("Dadata API connection error", inn=inn, error=str(e))
             raise ExternalServiceError("Cannot connect to Dadata API") from e
 
         data = response.json()
         suggestions: list[dict[str, Any]] = data.get("suggestions", [])
 
         if not suggestions:
-            logger.info("INN not found in Dadata", inn=inn)
             raise InnNotFoundError()
 
         suggestion = suggestions[0]
@@ -120,11 +108,6 @@ class DadataService:
         status_value: str = state.get("status", "")
 
         if status_value in ("LIQUIDATED", "BANKRUPT"):
-            logger.info(
-                "Company is liquidated or bankrupt",
-                inn=inn,
-                status=status_value,
-            )
             raise InnCompanyLiquidatedError()
 
         return self._parse_suggestion(suggestion)

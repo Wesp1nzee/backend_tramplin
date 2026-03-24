@@ -12,7 +12,8 @@
   6. POST /companies/{id}/review         (CURATOR)      → апрув / отклонение
 """
 
-import structlog
+import logging
+
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,7 +34,7 @@ from src.schemas.company import (
 from src.services.company import CompanyService
 from src.services.dadata import dadata_service
 
-logger = structlog.get_logger()
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/companies", tags=["Companies"])
 

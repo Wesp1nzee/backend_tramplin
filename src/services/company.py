@@ -44,7 +44,6 @@ import secrets
 import uuid as _uuid
 
 import redis
-import structlog
 
 from src.core.exceptions import AppError, PermissionDeniedError
 from src.models.enums import NotificationType, UserRole, VerificationStatus
@@ -62,8 +61,6 @@ from src.schemas.company import (
     InnVerifyResponse,
 )
 from src.services.dadata import DadataService
-
-logger = structlog.get_logger()
 
 # TTL сессионного токена подтверждения ИНН — 30 минут
 INN_SESSION_TTL = 1800
@@ -157,14 +154,6 @@ class CompanyService:
                     }
                 ),
             )
-            logger.info("INN session created", inn=result.inn, ttl=INN_SESSION_TTL)
-
-        logger.info(
-            "INN verified",
-            inn=request.inn,
-            company=result.short_name,
-            status=result.status,
-        )
 
         return InnVerifyResponse(
             inn=result.inn,
@@ -222,11 +211,7 @@ class CompanyService:
                 request.corporate_email, request.website_url
             )
             if not email_domain_verified:
-                logger.warning(
-                    "Email domain mismatch (will be reviewed by curator)",
-                    email=request.corporate_email,
-                    website=request.website_url,
-                )
+                pass
 
         company, _ = await self.company_repo.create_with_verification(
             owner_id=current_user.id,
@@ -238,11 +223,6 @@ class CompanyService:
         if self._redis and request.session_token:
             await self._redis.delete(f"{INN_SESSION_PREFIX}{request.session_token}")
 
-        logger.info(
-            "Company registered, awaiting documents + curator review",
-            company_id=str(company.id),
-            inn=company.inn,
-        )
         return CompanyResponse.model_validate(company)
 
     # ─────────────────────────────────────────────────────────
@@ -295,13 +275,6 @@ class CompanyService:
 
         # TODO: нотификация кураторам через Notification модель
         # await self._notify_curators(company)
-
-        logger.info(
-            "Verification documents submitted",
-            company_id=str(company.id),
-            links_count=len(new_links),
-            docs_count=len(new_docs),
-        )
 
         return CompanyVerificationStatusResponse(
             company_id=company.id,
@@ -413,12 +386,6 @@ class CompanyService:
         await self.company_repo.db.commit()
         await self.company_repo.db.refresh(company)
 
-        logger.info(
-            "Company verification decision made",
-            company_id=company_id,
-            approve=approve,
-            curator_id=str(curator.id),
-        )
         return CompanyResponse.model_validate(company)
 
     # ─────────────────────────────────────────────────────────

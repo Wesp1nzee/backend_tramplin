@@ -1,12 +1,8 @@
-import structlog
-
 from src.core.config import settings
 from src.core.security import hash_password
 from src.db.session import SessionManager
 from src.models.enums import UserRole
 from src.models.user import Profile, User
-
-logger = structlog.get_logger()
 
 DEFAULT_ADMIN_EMAIL = settings.DEFAULT_ADMIN_EMAIL
 DEFAULT_ADMIN_PASSWORD = settings.DEFAULT_ADMIN_PASSWORD
@@ -24,7 +20,6 @@ async def create_default_admin(session_manager: SessionManager) -> None:
     Эта функция должна вызываться при старте приложения в lifespan.
     """
     if session_manager.engine is None:
-        logger.error("Database engine not initialized")
         return
 
     async with session_manager.engine.begin() as conn:
@@ -35,7 +30,6 @@ async def create_default_admin(session_manager: SessionManager) -> None:
             existing_admin = result.fetchone()
 
             if existing_admin:
-                logger.info("Default admin already exists", email=DEFAULT_ADMIN_EMAIL)
                 return
 
             from datetime import UTC, datetime
@@ -80,11 +74,5 @@ async def create_default_admin(session_manager: SessionManager) -> None:
             )
 
             await conn.commit()
-            logger.info(
-                "Default admin created successfully",
-                email=DEFAULT_ADMIN_EMAIL,
-                role=UserRole.CURATOR,
-            )
-        except Exception as e:
-            logger.error("Failed to create default admin", error=str(e))
+        except Exception:
             raise

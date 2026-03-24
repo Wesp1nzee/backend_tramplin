@@ -1,7 +1,4 @@
 import redis.asyncio as redis
-import structlog
-
-logger = structlog.get_logger()
 
 
 class TokenBlacklist:
@@ -19,16 +16,13 @@ class TokenBlacklist:
         self._redis = redis.from_url(redis_url, decode_responses=True)
         try:
             await self._redis.ping()  # type: ignore[misc]
-            logger.info("Redis connection established for token blacklist")
-        except Exception as e:
-            logger.error("Failed to connect to Redis", error=str(e))
+        except Exception:
             raise
 
     async def disconnect(self) -> None:
         """Отключение от Redis."""
         if self._redis:
             await self._redis.close()
-            logger.info("Redis connection closed")
 
     async def add_token(self, token: str, expires_in_seconds: int) -> None:
         """
@@ -39,12 +33,10 @@ class TokenBlacklist:
             expires_in_seconds: Время жизни токена в секундах (TTL)
         """
         if not self._redis:
-            logger.warning("Redis not connected, token not blacklisted")
             return
 
         key = f"{self._prefix}{token}"
         await self._redis.setex(key, expires_in_seconds, "1")
-        logger.debug("Token added to blacklist", ttl=expires_in_seconds)
 
     async def is_blacklisted(self, token: str) -> bool:
         """

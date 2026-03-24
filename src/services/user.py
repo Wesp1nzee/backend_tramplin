@@ -1,6 +1,5 @@
 from uuid import UUID
 
-import structlog
 from sqlalchemy import select
 
 from src.core.exceptions import (
@@ -15,8 +14,6 @@ from src.models.skill import ProfileSkill, Skill
 from src.models.user import Profile, User
 from src.repositories.user import UserRepository
 from src.schemas.user import CuratorCreate, PasswordChangeRequest, UserUpdate
-
-logger = structlog.get_logger()
 
 
 class UserService:
@@ -99,9 +96,6 @@ class UserService:
             if skills_data is not None:
                 await self._update_profile_skills(user.profile, skills_data)
 
-        else:
-            logger.warning("Profile not found for user", user_id=user_id)
-
         await self.user_repo.db.commit()
 
         # Clear session cache to ensure fresh data on next select
@@ -123,12 +117,6 @@ class UserService:
         if not updated_user:
             raise NotFoundError()
 
-        logger.info(
-            "User profile updated",
-            user_id=user_id,
-            fields=list(update_data.keys()),
-            skills_count=len(updated_user.profile.profile_skills) if updated_user.profile else 0,
-        )
         return updated_user
 
     async def _update_profile_skills(
@@ -143,23 +131,14 @@ class UserService:
             profile: Profile object to update
             skills: List of skill names as strings
         """
-
-        logger.info("Updating profile skills", profile_id=str(profile.id), skills=skills)
-
         # Get current skill names
         current_skill_names = {ps.skill.name for ps in profile.profile_skills}
         new_skill_names = set(skills)
-
-        logger.info("Current skills", current_skills=list(current_skill_names))
-        logger.info("New skills", new_skills=list(new_skill_names))
 
         # Skills to remove
         skills_to_remove = current_skill_names - new_skill_names
         # Skills to add
         skills_to_add = new_skill_names - current_skill_names
-
-        logger.info("Skills to remove", to_remove=list(skills_to_remove))
-        logger.info("Skills to add", to_add=list(skills_to_add))
 
         # Remove old skills using delete
         if skills_to_remove:
@@ -169,7 +148,6 @@ class UserService:
             ]
             for ps in skills_to_remove_objs:
                 await self.user_repo.db.delete(ps)
-            logger.info("Deleted old skills", deleted=list(skills_to_remove))
 
         # Add new skills
         if skills_to_add:
@@ -179,8 +157,6 @@ class UserService:
             )
             existing_skills = result.scalars().all()
             existing_skill_map = {s.name: s for s in existing_skills}
-
-            logger.info("Existing skills from DB", existing=list(existing_skill_map.keys()))
 
             # Create missing skills
             skills_to_create = [s for s in skills_to_add if s not in existing_skill_map]
@@ -202,8 +178,6 @@ class UserService:
                 for skill in result.scalars().all():
                     existing_skill_map[skill.name] = skill
 
-                logger.info("Created new skills", created=skills_to_create)
-
             # Create ProfileSkill relationships
             for skill_name in skills_to_add:
                 skill = existing_skill_map[skill_name]
@@ -214,11 +188,8 @@ class UserService:
                 )
                 self.user_repo.db.add(profile_skill)
 
-            logger.info("Created ProfileSkill relationships", count=len(skills_to_add))
-
             # Flush to ensure ProfileSkill records are written to DB
             await self.user_repo.db.flush()
-            logger.info("Flushed ProfileSkill records to DB")
 
     async def change_password(
         self,
@@ -253,8 +224,6 @@ class UserService:
         user.hashed_password = hash_password(password_request.new_password)
         await self.user_repo.db.commit()
 
-        logger.info("Password changed successfully", user_id=user_id)
-
     async def create_curator(self, curator_data: CuratorCreate) -> User:
         """
         Создание куратора (только администратором).
@@ -285,11 +254,6 @@ class UserService:
             last_name=curator_data.last_name,
         )
 
-        logger.info(
-            "Curator created by admin",
-            curator_id=str(user.id),
-            email=user.email,
-        )
         return user
 
     async def verify_employer(self, employer_id: str, is_verified: bool) -> User:
@@ -325,9 +289,4 @@ class UserService:
         await self.user_repo.db.commit()
         await self.user_repo.db.refresh(employer)
 
-        logger.info(
-            "Employer verification status updated",
-            employer_id=str(employer.id),
-            is_verified=is_verified,
-        )
         return employer

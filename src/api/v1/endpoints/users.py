@@ -1,4 +1,3 @@
-import structlog
 from fastapi import APIRouter, Depends, status
 
 from src.api.v1.deps import RoleChecker, get_current_user, get_user_service
@@ -13,8 +12,6 @@ from src.schemas.user import (
     UserUpdate,
 )
 from src.services.user import UserService
-
-logger = structlog.get_logger()
 
 router = APIRouter(prefix="/users", tags=["Users"])
 

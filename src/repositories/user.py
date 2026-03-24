@@ -1,6 +1,5 @@
 from uuid import UUID
 
-import structlog
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
@@ -9,8 +8,6 @@ from src.core.exceptions import RepositoryError
 from src.models.skill import ProfileSkill
 from src.models.user import Profile, User
 from src.repositories.base import BaseRepository
-
-logger = structlog.get_logger()
 
 
 class UserRepository(BaseRepository[User]):
@@ -27,7 +24,6 @@ class UserRepository(BaseRepository[User]):
             result = await self.db.execute(select(User).where(User.email == email))
             return result.scalar_one_or_none()
         except SQLAlchemyError as e:
-            logger.error("Database error while getting user by email", error=str(e))
             raise RepositoryError() from e
 
     async def get_with_profile(self, user_id: UUID) -> User | None:
@@ -44,7 +40,6 @@ class UserRepository(BaseRepository[User]):
             )
             return result.scalar_one_or_none()
         except SQLAlchemyError as e:
-            logger.error("Database error while getting user with profile", error=str(e))
             raise RepositoryError() from e
 
     async def get_by_email_with_profile(self, email: str) -> User | None:
@@ -55,7 +50,6 @@ class UserRepository(BaseRepository[User]):
             )
             return result.scalar_one_or_none()
         except SQLAlchemyError as e:
-            logger.error("Database error while getting user by email with profile", error=str(e))
             raise RepositoryError() from e
 
     async def email_exists(self, email: str) -> bool:
@@ -67,7 +61,6 @@ class UserRepository(BaseRepository[User]):
             result = await self.db.execute(select(User.id).where(User.email == email))
             return result.scalar_one_or_none() is not None
         except SQLAlchemyError as e:
-            logger.error("Database error while checking email exists", error=str(e))
             raise RepositoryError() from e
 
     async def create_with_profile(
@@ -94,10 +87,8 @@ class UserRepository(BaseRepository[User]):
 
             refreshed = await self.get_with_profile(user.id)
             if refreshed is None:
-                logger.error("Created user not found after commit", user_id=str(user.id))
                 raise RepositoryError(detail="Failed to retrieve created user with profile")
             return refreshed
         except SQLAlchemyError as e:
             await self.db.rollback()
-            logger.error("Database error while creating user with profile", error=str(e))
             raise RepositoryError() from e

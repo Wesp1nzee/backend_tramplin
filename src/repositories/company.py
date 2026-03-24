@@ -7,7 +7,6 @@
 
 from uuid import UUID
 
-import structlog
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -22,8 +21,6 @@ from src.schemas.company import (
     InnLookupResult,
 )
 
-logger = structlog.get_logger()
-
 
 class CompanyRepository(BaseRepository[Company]):
     model = Company
@@ -33,7 +30,6 @@ class CompanyRepository(BaseRepository[Company]):
             result = await self.db.execute(select(Company).where(Company.inn == inn))
             return result.scalar_one_or_none()
         except SQLAlchemyError as e:
-            logger.error("DB error get_by_inn", error=str(e))
             raise RepositoryError() from e
 
     async def get_by_owner(self, owner_id: UUID) -> Company | None:
@@ -151,5 +147,4 @@ class CompanyRepository(BaseRepository[Company]):
                 for company, verification, owner in rows
             ]
         except SQLAlchemyError as e:
-            logger.error("DB error get_pending_with_details", error=str(e))
             raise RepositoryError() from e

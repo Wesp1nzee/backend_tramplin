@@ -1,6 +1,5 @@
 import uuid
 
-import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
@@ -16,8 +15,6 @@ from src.repositories.user import UserRepository
 from src.services.auth import AuthService
 from src.services.user import UserService
 from src.utils.cache import token_blacklist
-
-logger = structlog.get_logger()
 
 __all__ = [
     "get_db",

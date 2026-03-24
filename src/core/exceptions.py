@@ -1,9 +1,6 @@
-import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-
-logger = structlog.get_logger()
 
 
 class AppError(Exception):
@@ -82,11 +79,6 @@ def setup_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
         """Обработчик доменных исключений."""
-        if exc.status_code >= 500:
-            logger.error(f"Server error: {exc.error_code}", detail=exc.detail)
-        else:
-            logger.warning(f"Client error: {exc.error_code}", detail=exc.detail)
-
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -133,8 +125,6 @@ def setup_exception_handlers(app: FastAPI) -> None:
         exc: Exception,
     ) -> JSONResponse:
         """Fallback для необработанных исключений."""
-        logger.error(f"Unhandled exception: {exc}", exc_info=True)
-
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={

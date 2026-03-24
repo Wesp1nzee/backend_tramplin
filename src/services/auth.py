@@ -1,7 +1,6 @@
 import uuid
 from datetime import UTC, datetime
 
-import structlog
 from jwt import DecodeError, ExpiredSignatureError
 from jwt import InvalidTokenError as JWTInvalidTokenError
 from jwt import decode as jwt_decode
@@ -19,8 +18,6 @@ from src.models.user import User
 from src.repositories.user import UserRepository
 from src.schemas.user import AuthResponse, TokenResponse, UserCreate
 from src.utils.cache import token_blacklist
-
-logger = structlog.get_logger()
 
 
 class AuthService:
@@ -56,7 +53,6 @@ class AuthService:
             last_name=user_in.last_name,
         )
 
-        logger.info("User registered", user_id=str(user.id), role=str(user.role))
         return AuthResponse(**create_tokens(user.id), user=user)
 
     async def authenticate(self, email: str, password: str) -> AuthResponse:
@@ -74,7 +70,6 @@ class AuthService:
         if not user.is_active:
             raise UserNotActiveError()
 
-        logger.info("User authenticated", user_id=str(user.id), role=str(user.role))
         return AuthResponse(**create_tokens(user.id), user=user)
 
     async def refresh_tokens(self, refresh_token: str) -> TokenResponse:
@@ -89,8 +84,6 @@ class AuthService:
             raise InvalidTokenError()
 
         if await token_blacklist.is_blacklisted(refresh_token):
-            logger.warning("Attempt to use blacklisted refresh token")
-
             raise InvalidTokenError()
 
         try:
@@ -105,7 +98,6 @@ class AuthService:
         if not user.is_active:
             raise UserNotActiveError()
 
-        logger.info("Tokens refreshed", user_id=str(user_id))
         return TokenResponse(**create_tokens(user_id))
 
     async def logout(self, access_token: str, refresh_token: str) -> None:
@@ -124,7 +116,6 @@ class AuthService:
                 refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
             )
         except (Exception, DecodeError, ExpiredSignatureError, JWTInvalidTokenError) as e:
-            logger.warning("Invalid token in logout", error=str(e))
             raise InvalidTokenError("Invalid token provided") from e
 
         access_exp = datetime.fromtimestamp(access_payload["exp"], tz=UTC)
@@ -139,8 +130,6 @@ class AuthService:
         if refresh_ttl > 0:
             await token_blacklist.add_token(refresh_token, refresh_ttl)
 
-        logger.info("User logged out, tokens blacklisted")
-
     async def request_password_reset(self, email: str) -> dict[str, str]:
         """
         Запрашивает сброс пароля через email.
@@ -150,7 +139,6 @@ class AuthService:
         """
         user = await self.user_repo.get_by_email(email)
         if not user:
-            logger.info("Password reset requested", email_hash=self._hash_email_for_log(email))
             return {"message": "If the email exists, a reset link has been sent"}
 
         from datetime import timedelta
@@ -166,14 +154,7 @@ class AuthService:
         # TODO: Отправить email с токеном
         # await email_service.send_password_reset_email(user.email, reset_token)
 
-        logger.info("Password reset token generated", user_id=str(user.id))
         return {"message": "If the email exists, a reset link has been sent"}
-
-    def _hash_email_for_log(self, email: str) -> str:
-        """Хеширует email для безопасного логирования"""
-        import hashlib
-
-        return hashlib.sha256(email.encode()).hexdigest()[:8]
 
     async def confirm_password_reset(self, token: str, new_password: str) -> dict[str, str]:
         """
@@ -199,5 +180,4 @@ class AuthService:
         user.hashed_password = hash_password(new_password)
         await self.user_repo.db.commit()
 
-        logger.info("Password reset completed", user_id=str(user.id))
         return {"message": "Password has been reset successfully"}

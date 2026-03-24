@@ -1,6 +1,5 @@
 from collections.abc import AsyncGenerator
 
-import structlog
 from pydantic import PostgresDsn
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -8,8 +7,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-
-logger = structlog.get_logger()
 
 
 class SessionManager:
@@ -48,7 +45,6 @@ class SessionManager:
     async def check_health(self) -> bool:
         """Проверка связи с БД для Health Check."""
         if self.session_maker is None:
-            logger.error("Database session maker is not initialized")
             return False
 
         try:
@@ -57,8 +53,7 @@ class SessionManager:
 
                 await session.execute(text("SELECT 1"))
             return True
-        except Exception as e:
-            logger.error("Database health check failed", error=str(e))
+        except Exception:
             return False
 
 

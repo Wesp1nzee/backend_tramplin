@@ -31,7 +31,7 @@ all: format lint typecheck security
 
 # Запуск FastAPI в режиме разработки
 run:
-	uv run granian src.main:app --interface asgi --reload
+	uv run granian src.main:app --interface asgi --reload --reload-ignore-dirs 'logs'
 
 # Запуск тестов
 test:

@@ -1,7 +1,6 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
@@ -14,29 +13,41 @@ from src.api.v1.endpoints.users import router as users_router
 from src.core.config import settings
 from src.core.exceptions import setup_exception_handlers
 from src.core.init_data import create_default_admin
+
+# Импорт логирования
+from src.core.logging_config import logger, setup_logging
 from src.db.session import session_manager
+from src.middleware.logging import RequestLoggingMiddleware, SlowRequestMiddleware
 from src.utils.cache import token_blacklist
 from src.utils.rate_limiter import limiter
-
-logger = structlog.get_logger()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
-    Управление жизненным циклом приложения:
-    Инициализация ресурсов до старта и их очистка после остановки.
+    Управление жизненным циклом приложения.
     """
+    # Инициализируем логирование
+    setup_logging()
+
+    logger.info("Application starting up", env=settings.ENVIRONMENT, version="0.1.0")
+
+    # Инициализация ресурсов
     session_manager.init(settings.DATABASE_URL)
-
     await create_default_admin(session_manager)
-
     await token_blacklist.connect(settings.REDIS_URL)
 
-    logger.info("Application started", env=settings.ENVIRONMENT, version="0.1.0")
+    logger.info(
+        "Application started successfully",
+        database="connected",
+        cache="connected",
+        docs_enabled=settings.ENABLE_DOCS,
+    )
 
     yield
 
+    # Очистка ресурсов
+    logger.info("Application shutting down")
     await token_blacklist.disconnect()
     await session_manager.close()
     logger.info("Application shutdown complete")
@@ -54,13 +65,18 @@ def create_app() -> FastAPI:
     )
 
     app.state.limiter = limiter
+
     if settings.ENABLE_RATE_LIMITING:
         app.add_exception_handler(
             RateLimitExceeded,
             _rate_limit_exceeded_handler,  # type: ignore[arg-type]
         )
 
-    # Middlewares
+    # Добавляем middleware логирования (должны быть первыми)
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(SlowRequestMiddleware)
+
+    # CORS Middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
@@ -80,15 +96,15 @@ def create_app() -> FastAPI:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        # response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         return response
 
     setup_exception_handlers(app)
-
     app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(companies_router, prefix=settings.API_V1_STR)
     app.include_router(users_router, prefix=settings.API_V1_STR)
+
+    logger.info("API routers registered", routes=["auth", "companies", "users"])
 
     return app
 
@@ -98,8 +114,24 @@ app = create_app()
 
 @app.get("/health", tags=["System"])
 async def health_check() -> dict[str, str | bool]:
+    request_id = getattr(app, "request_id", None)
+    logger.debug(
+        "Health check requested",
+        extra={"request_id": request_id},
+    )
+
+    db_health = await session_manager.check_health()
+    cache_health = await token_blacklist.check_health()
+
+    logger.info(
+        "Health check completed",
+        database=db_health,
+        cache=cache_health,
+        status="healthy" if db_health and cache_health else "degraded",
+    )
+
     return {
-        "status": "healthy",
-        "database": await session_manager.check_health(),
-        "cache": await token_blacklist.check_health(),
+        "status": "healthy" if db_health and cache_health else "degraded",
+        "database": db_health,
+        "cache": cache_health,
     }
