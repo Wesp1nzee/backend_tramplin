@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 import pytest
 from fastapi import status
 from httpx import AsyncClient
@@ -30,7 +32,7 @@ async def test_get_current_user_data(client: AsyncClient) -> None:
     response = await client.get("/api/v1/users/me", headers=headers)
     assert response.status_code == status.HTTP_200_OK
 
-    data = response.json()
+    data = cast(dict[str, Any], response.json())
     assert data["email"] == user_data["email"]
     assert data["role"] == user_data["role"]
     assert data["profile"]["first_name"] == user_data["first_name"]
@@ -69,12 +71,12 @@ async def test_update_user_profile(client: AsyncClient) -> None:
     response = await client.patch("/api/v1/users/me", json=update_data, headers=headers)
     assert response.status_code == status.HTTP_200_OK
 
-    data = response.json()
+    data = cast(dict[str, Any], response.json())
     assert data["profile"]["first_name"] == update_data["first_name"]
     assert data["profile"]["last_name"] == update_data["last_name"]
     assert data["profile"]["university"] == update_data["university"]
     assert data["profile"]["graduation_year"] == update_data["graduation_year"]
-    assert data["profile"]["skills"] == update_data["skills"]
+    assert sorted(data["profile"]["skills"]) == sorted(update_data["skills"])  # type: ignore[call-overload]
     assert data["profile"]["social_links"] == update_data["social_links"]
 
 
@@ -164,7 +166,7 @@ async def test_password_reset_request(client: AsyncClient) -> None:
     response = await client.post("/api/v1/auth/password-reset", json=reset_request)
     assert response.status_code == status.HTTP_200_OK
 
-    data = response.json()
+    data = cast(dict[str, Any], response.json())
     assert "message" in data
     assert "token" not in data
 
@@ -250,7 +252,7 @@ async def test_create_curator_by_admin(client: AsyncClient) -> None:
     response = await client.post("/api/v1/users/curators", json=curator_data, headers=admin_headers)
     assert response.status_code == status.HTTP_201_CREATED
 
-    data = response.json()
+    data = cast(dict[str, Any], response.json())
     assert data["email"] == curator_data["email"]
     assert data["role"] == str(UserRole.CURATOR)
     assert data["is_verified"] is True
@@ -320,7 +322,7 @@ async def test_verify_employer_by_curator(client: AsyncClient) -> None:
     )
     assert response.status_code == status.HTTP_200_OK
 
-    data = response.json()
+    data = cast(dict[str, Any], response.json())
     assert data["is_verified"] is True
     assert data["role"] == str(UserRole.EMPLOYER)
 

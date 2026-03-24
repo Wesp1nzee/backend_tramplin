@@ -10,6 +10,7 @@ from sqlalchemy.sql.schema import SchemaItem
 
 from src.core.config import settings
 from src.db.base import Base
+from src.models import *  # noqa: F403
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

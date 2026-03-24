@@ -8,6 +8,7 @@ from src.schemas.user import (
     CuratorCreate,
     EmployerVerifyRequest,
     PasswordChangeRequest,
+    ProfileResponse,
     UserResponse,
     UserUpdate,
 )
@@ -16,6 +17,36 @@ from src.services.user import UserService
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+def _build_user_response(user: User) -> UserResponse:
+    """
+    Build UserResponse with skills extracted from profile_skills relationship.
+
+    Pydantic's from_attributes doesn't handle nested relationships well,
+    so we manually extract skills from the ProfileSkill relationship.
+    """
+    profile_data = None
+    if user.profile:
+        profile_data = ProfileResponse(
+            first_name=user.profile.first_name,
+            last_name=user.profile.last_name,
+            middle_name=user.profile.middle_name,
+            university=user.profile.university,
+            graduation_year=user.profile.graduation_year,
+            social_links=user.profile.social_links or {},
+            privacy_settings=user.profile.privacy_settings or {},
+            skills=[ps.skill.name for ps in user.profile.profile_skills if hasattr(ps, "skill")],
+        )
+
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        role=user.role,
+        is_verified=user.is_verified,
+        created_at=user.created_at,
+        profile=profile_data,
+    )
 
 
 @router.get(
@@ -36,7 +67,7 @@ async def get_current_user_data(
     роль, статус верификации и настройки приватности.
     """
     user_with_profile = await user_service.get_user_with_profile(str(current_user.id))
-    return UserResponse.model_validate(user_with_profile)
+    return _build_user_response(user_with_profile)
 
 
 @router.patch(
@@ -65,7 +96,7 @@ async def update_current_user(
         user_id=str(current_user.id),
         user_update=user_update,
     )
-    return UserResponse.model_validate(updated_user)
+    return _build_user_response(updated_user)
 
 
 @router.post(

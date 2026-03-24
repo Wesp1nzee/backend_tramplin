@@ -6,6 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 
 from src.core.exceptions import RepositoryError
+from src.models.skill import ProfileSkill
 from src.models.user import Profile, User
 from src.repositories.base import BaseRepository
 
@@ -33,7 +34,13 @@ class UserRepository(BaseRepository[User]):
         """Загрузить пользователя вместе с профилем (один запрос через JOIN)."""
         try:
             result = await self.db.execute(
-                select(User).options(selectinload(User.profile)).where(User.id == user_id)
+                select(User)
+                .options(
+                    selectinload(User.profile)
+                    .selectinload(Profile.profile_skills)
+                    .selectinload(ProfileSkill.skill)
+                )
+                .where(User.id == user_id)
             )
             return result.scalar_one_or_none()
         except SQLAlchemyError as e:

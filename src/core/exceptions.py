@@ -19,7 +19,7 @@ class AppError(Exception):
     error_code: str = "INTERNAL_ERROR"
 
     def __init__(self, detail: str | None = None) -> None:
-        self.detail = detail or self.__class__.detail
+        self.detail = detail or self.detail
         super().__init__(self.detail)
 
 
@@ -71,6 +71,13 @@ class RepositoryError(AppError):
     detail = "Database operation failed"
 
 
+# ─── External Service Errors (502) ───
+class ExternalServiceError(AppError):
+    status_code = status.HTTP_502_BAD_GATEWAY
+    detail = "External service is unavailable. Please try again later."
+    error_code = "EXTERNAL_SERVICE_ERROR"
+
+
 def setup_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def app_exception_handler(request: Request, exc: AppError) -> JSONResponse:
@@ -96,7 +103,6 @@ def setup_exception_handlers(app: FastAPI) -> None:
         exc: RequestValidationError,
     ) -> JSONResponse:
         """Обработчик валидации Pydantic."""
-        # Convert errors to JSON-serializable format (ValueError -> str)
         errors = []
         for error in exc.errors():
             err_copy = error.copy()

@@ -9,8 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
 from src.api.v1.endpoints.auth import router as auth_router
-
-# from src.api.v1.endpoints.companies import router as companies_router
+from src.api.v1.endpoints.companies import router as companies_router
 from src.api.v1.endpoints.users import router as users_router
 from src.core.config import settings
 from src.core.exceptions import setup_exception_handlers
@@ -88,7 +87,7 @@ def create_app() -> FastAPI:
     setup_exception_handlers(app)
 
     app.include_router(auth_router, prefix=settings.API_V1_STR)
-    # app.include_router(companies_router, prefix=settings.API_V1_STR)
+    app.include_router(companies_router, prefix=settings.API_V1_STR)
     app.include_router(users_router, prefix=settings.API_V1_STR)
 
     return app

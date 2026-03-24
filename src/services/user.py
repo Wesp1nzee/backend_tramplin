@@ -1,4 +1,7 @@
+from uuid import UUID
+
 import structlog
+from sqlalchemy import select
 
 from src.core.exceptions import (
     InvalidCredentialsError,
@@ -8,7 +11,8 @@ from src.core.exceptions import (
 )
 from src.core.security import hash_password, verify_password
 from src.models.enums import UserRole
-from src.models.user import User
+from src.models.skill import ProfileSkill, Skill
+from src.models.user import Profile, User
 from src.repositories.user import UserRepository
 from src.schemas.user import CuratorCreate, PasswordChangeRequest, UserUpdate
 
@@ -72,8 +76,6 @@ class UserService:
         Raises:
             NotFoundError: Если пользователь не найден
         """
-        from uuid import UUID
-
         try:
             user_uuid = UUID(user_id)
         except ValueError as e:
@@ -85,16 +87,39 @@ class UserService:
 
         update_data = user_update.model_dump(exclude_unset=True)
 
+        # Handle skills separately - they are stored in ProfileSkill relationship
+        skills_data = update_data.pop("skills", None)
+
         if user.profile:
             for field, value in update_data.items():
                 if hasattr(user.profile, field):
                     setattr(user.profile, field, value)
+
+            # Handle skills update
+            if skills_data is not None:
+                await self._update_profile_skills(user.profile, skills_data)
+
         else:
             logger.warning("Profile not found for user", user_id=user_id)
 
         await self.user_repo.db.commit()
 
-        updated_user = await self.user_repo.get_with_profile(user_uuid)
+        # Clear session cache to ensure fresh data on next select
+        self.user_repo.db.expire_all()
+
+        # Explicitly reload with profile_skills to ensure they are loaded
+        from sqlalchemy.orm import selectinload
+
+        result = await self.user_repo.db.execute(
+            select(User)
+            .options(
+                selectinload(User.profile)
+                .selectinload(Profile.profile_skills)
+                .selectinload(ProfileSkill.skill)
+            )
+            .where(User.id == user_uuid)
+        )
+        updated_user = result.scalar_one_or_none()
         if not updated_user:
             raise NotFoundError()
 
@@ -102,8 +127,98 @@ class UserService:
             "User profile updated",
             user_id=user_id,
             fields=list(update_data.keys()),
+            skills_count=len(updated_user.profile.profile_skills) if updated_user.profile else 0,
         )
         return updated_user
+
+    async def _update_profile_skills(
+        self,
+        profile: Profile,
+        skills: list[str],
+    ) -> None:
+        """
+        Update profile skills by creating/deleting ProfileSkill relationships.
+
+        Args:
+            profile: Profile object to update
+            skills: List of skill names as strings
+        """
+
+        logger.info("Updating profile skills", profile_id=str(profile.id), skills=skills)
+
+        # Get current skill names
+        current_skill_names = {ps.skill.name for ps in profile.profile_skills}
+        new_skill_names = set(skills)
+
+        logger.info("Current skills", current_skills=list(current_skill_names))
+        logger.info("New skills", new_skills=list(new_skill_names))
+
+        # Skills to remove
+        skills_to_remove = current_skill_names - new_skill_names
+        # Skills to add
+        skills_to_add = new_skill_names - current_skill_names
+
+        logger.info("Skills to remove", to_remove=list(skills_to_remove))
+        logger.info("Skills to add", to_add=list(skills_to_add))
+
+        # Remove old skills using delete
+        if skills_to_remove:
+            # Get skill IDs to remove
+            skills_to_remove_objs = [
+                ps for ps in profile.profile_skills if ps.skill.name in skills_to_remove
+            ]
+            for ps in skills_to_remove_objs:
+                await self.user_repo.db.delete(ps)
+            logger.info("Deleted old skills", deleted=list(skills_to_remove))
+
+        # Add new skills
+        if skills_to_add:
+            # Get or create skills
+            result = await self.user_repo.db.execute(
+                select(Skill).where(Skill.name.in_(skills_to_add))
+            )
+            existing_skills = result.scalars().all()
+            existing_skill_map = {s.name: s for s in existing_skills}
+
+            logger.info("Existing skills from DB", existing=list(existing_skill_map.keys()))
+
+            # Create missing skills
+            skills_to_create = [s for s in skills_to_add if s not in existing_skill_map]
+            if skills_to_create:
+                for skill_name in skills_to_create:
+                    new_skill = Skill(
+                        name=skill_name,
+                        slug=skill_name.lower().replace(" ", "-"),
+                    )
+                    self.user_repo.db.add(new_skill)
+
+                # Flush to get the IDs for newly created skills
+                await self.user_repo.db.flush()
+
+                # Reload to get the newly created skills with IDs
+                result = await self.user_repo.db.execute(
+                    select(Skill).where(Skill.name.in_(skills_to_create))
+                )
+                for skill in result.scalars().all():
+                    existing_skill_map[skill.name] = skill
+
+                logger.info("Created new skills", created=skills_to_create)
+
+            # Create ProfileSkill relationships
+            for skill_name in skills_to_add:
+                skill = existing_skill_map[skill_name]
+                profile_skill = ProfileSkill(
+                    profile_id=profile.id,
+                    skill_id=skill.id,
+                    proficiency_level=1,  # Default level
+                )
+                self.user_repo.db.add(profile_skill)
+
+            logger.info("Created ProfileSkill relationships", count=len(skills_to_add))
+
+            # Flush to ensure ProfileSkill records are written to DB
+            await self.user_repo.db.flush()
+            logger.info("Flushed ProfileSkill records to DB")
 
     async def change_password(
         self,

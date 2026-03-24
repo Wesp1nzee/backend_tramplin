@@ -19,6 +19,16 @@ from src.utils.cache import token_blacklist
 
 logger = structlog.get_logger()
 
+__all__ = [
+    "get_db",
+    "get_user_repository",
+    "get_auth_service",
+    "get_user_service",
+    "get_current_user",
+    "get_current_verified_user",
+    "RoleChecker",
+]
+
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login",
     scheme_name="JWT",

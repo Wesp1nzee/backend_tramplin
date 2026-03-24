@@ -97,5 +97,8 @@ class Settings(BaseSettings):
     MIN_PASSWORD_LENGTH: int = 8
     MAX_IMAGE_SIZE_MB: int = 5
 
+    DADATA_SECRET_KEY: str
+    DADATA_API_KEY: str
+
 
 settings = Settings()
