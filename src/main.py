@@ -14,8 +14,6 @@ from src.api.v1.endpoints.users import router as users_router
 from src.core.config import settings
 from src.core.exceptions import setup_exception_handlers
 from src.core.init_data import create_default_admin
-
-# Импорт логирования
 from src.core.logging_config import logger, setup_logging
 from src.db.session import session_manager
 from src.middleware.logging import RequestLoggingMiddleware, SlowRequestMiddleware
@@ -74,7 +72,6 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(SlowRequestMiddleware)
 
-    # CORS Middleware
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,

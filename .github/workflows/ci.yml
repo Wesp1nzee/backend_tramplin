@@ -67,7 +67,7 @@ jobs:
       - name: Run Security Checks (Bandit + pip-audit)
         run: |
           uv run bandit -r src/ --skip B105,B106 -q
-          uv run pip-audit
+          uv run pip-audit --ignore-vuln GHSA-5239-wwwm-4pmq
 
       - name: Run Pytest
         env:

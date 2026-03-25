@@ -13,6 +13,8 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from src.core.exceptions import NotFoundError
 from src.models.user import User
 from src.repositories.opportunity import OpportunityRepository
@@ -164,8 +166,12 @@ class OpportunityService:
                     )
                 )
                 lat, lng = lat_result.one()
-            except Exception:
-                pass  # Координаты не критичны для детальной карточки
+            except SQLAlchemyError as e:
+                logger.debug("Failed to extract coordinates for opportunity %s: %s", opp.id, e)
+                lat, lng = None, None
+            except (TypeError, ValueError) as e:
+                logger.debug("Invalid coordinate format for opportunity %s: %s", opp.id, e)
+                lat, lng = None, None
 
         is_favorited = False
         is_applied = False
