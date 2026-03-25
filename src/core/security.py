@@ -4,8 +4,7 @@ from typing import Any
 
 import jwt
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
-from jwt.exceptions import ExpiredSignatureError, InvalidTokenError, PyJWTError
+from jwt.exceptions import PyJWTError
 
 from src.core.config import settings
 
@@ -21,7 +20,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Проверяет пароль, возвращая False при любой ошибке валидации."""
     try:
         return ph.verify(hashed_password, plain_password)
-    except VerifyMismatchError, Exception:
+    except Exception:
         return False
 
 
@@ -64,7 +63,7 @@ def decode_token(token: str, expected_type: str = "access") -> dict[str, Any] | 
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
         )
-    except PyJWTError, ExpiredSignatureError, InvalidTokenError:
+    except PyJWTError:
         return None
 
     if payload.get("type") != expected_type:

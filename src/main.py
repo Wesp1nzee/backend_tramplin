@@ -9,6 +9,7 @@ from starlette.responses import Response
 
 from src.api.v1.endpoints.auth import router as auth_router
 from src.api.v1.endpoints.companies import router as companies_router
+from src.api.v1.endpoints.opportunities import router as opportunities_router
 from src.api.v1.endpoints.users import router as users_router
 from src.core.config import settings
 from src.core.exceptions import setup_exception_handlers
@@ -27,12 +28,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     Управление жизненным циклом приложения.
     """
-    # Инициализируем логирование
+
     setup_logging()
 
     logger.info("Application starting up", env=settings.ENVIRONMENT, version="0.1.0")
 
-    # Инициализация ресурсов
     session_manager.init(settings.DATABASE_URL)
     await create_default_admin(session_manager)
     await token_blacklist.connect(settings.REDIS_URL)
@@ -46,7 +46,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
-    # Очистка ресурсов
     logger.info("Application shutting down")
     await token_blacklist.disconnect()
     await session_manager.close()
@@ -72,7 +71,6 @@ def create_app() -> FastAPI:
             _rate_limit_exceeded_handler,  # type: ignore[arg-type]
         )
 
-    # Добавляем middleware логирования (должны быть первыми)
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(SlowRequestMiddleware)
 
@@ -102,9 +100,10 @@ def create_app() -> FastAPI:
     setup_exception_handlers(app)
     app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(companies_router, prefix=settings.API_V1_STR)
+    app.include_router(opportunities_router, prefix=settings.API_V1_STR)
     app.include_router(users_router, prefix=settings.API_V1_STR)
 
-    logger.info("API routers registered", routes=["auth", "companies", "users"])
+    logger.info("API routers registered", routes=["auth", "companies", "glossary", "opportunities", "users"])
 
     return app
 
