@@ -9,6 +9,7 @@ from starlette.responses import Response
 
 from src.api.v1.endpoints.auth import router as auth_router
 from src.api.v1.endpoints.companies import router as companies_router
+from src.api.v1.endpoints.glossary import router as glossary_router
 from src.api.v1.endpoints.opportunities import router as opportunities_router
 from src.api.v1.endpoints.users import router as users_router
 from src.core.config import settings
@@ -17,6 +18,7 @@ from src.core.init_data import create_default_admin
 from src.core.logging_config import logger, setup_logging
 from src.db.session import session_manager
 from src.middleware.logging import RequestLoggingMiddleware, SlowRequestMiddleware
+from src.models.seed_data import seed_skills_and_tags
 from src.utils.cache import token_blacklist
 from src.utils.rate_limiter import limiter
 
@@ -33,6 +35,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     session_manager.init(settings.DATABASE_URL)
     await create_default_admin(session_manager)
+
+    # Заполняем каталог навыков и тегов системными данными
+    if session_manager.session_maker:
+        async with session_manager.session_maker() as session:
+            await seed_skills_and_tags(session)
+            logger.info("Skills and tags seeded successfully")
+
     await token_blacklist.connect(settings.REDIS_URL)
 
     logger.info(
@@ -99,6 +108,7 @@ def create_app() -> FastAPI:
     app.include_router(companies_router, prefix=settings.API_V1_STR)
     app.include_router(opportunities_router, prefix=settings.API_V1_STR)
     app.include_router(users_router, prefix=settings.API_V1_STR)
+    app.include_router(glossary_router, prefix=settings.API_V1_STR)
 
     logger.info("API routers registered", routes=["auth", "companies", "glossary", "opportunities", "users"])
 

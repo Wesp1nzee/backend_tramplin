@@ -11,8 +11,10 @@ from src.core.security import decode_token
 from src.db.session import get_db
 from src.models.enums import UserRole
 from src.models.user import User
+from src.repositories.glossary import GlossaryRepository
 from src.repositories.user import UserRepository
 from src.services.auth import AuthService
+from src.services.glossary import GlossaryService
 from src.services.user import UserService
 from src.utils.cache import token_blacklist
 
@@ -24,6 +26,8 @@ __all__ = [
     "get_current_user",
     "get_current_verified_user",
     "RoleChecker",
+    "get_glossary_repository",
+    "get_glossary_service",
 ]
 
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -122,3 +126,22 @@ class RoleChecker:
                 detail="Not enough permissions",
             )
         return user
+
+
+# ─── Glossary Dependencies ────────────────────────────────────
+
+
+def get_glossary_repository(db: AsyncSession = Depends(get_db)) -> GlossaryRepository:
+    """
+    Dependency для получения репозитория глоссария.
+    """
+    return GlossaryRepository(db)
+
+
+def get_glossary_service(
+    glossary_repo: GlossaryRepository = Depends(get_glossary_repository),
+) -> GlossaryService:
+    """
+    Dependency для получения сервиса глоссария.
+    """
+    return GlossaryService(glossary_repo)

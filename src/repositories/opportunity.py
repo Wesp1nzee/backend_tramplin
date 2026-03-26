@@ -14,7 +14,7 @@ import logging
 from uuid import UUID
 
 from geoalchemy2 import Geometry
-from sqlalchemy import cast, func, select
+from sqlalchemy import cast, delete, func, select, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Select
@@ -269,8 +269,6 @@ class OpportunityRepository(BaseRepository[Opportunity]):
 
     async def increment_views(self, opportunity_id: UUID) -> None:
         """Атомарно увеличивает счётчик просмотров."""
-        from sqlalchemy import update
-
         try:
             await self.db.execute(
                 update(Opportunity).where(Opportunity.id == opportunity_id).values(views_count=Opportunity.views_count + 1)
@@ -356,6 +354,225 @@ class OpportunityRepository(BaseRepository[Opportunity]):
 
         except SQLAlchemyError as e:
             logger.error("OpportunityRepository.get_filter_options error: %s", e)
+            raise RepositoryError() from e
+
+    # ════════════════════════════════════════════════════════════
+    #  Методы для работодателей (Employer CRUD)
+    # ════════════════════════════════════════════════════════════
+
+    async def get_employer_opportunities(
+        self,
+        company_id: UUID,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Opportunity], int]:
+        """
+        Получить все вакансии работодателя с пагинацией.
+        Включая черновики, архивные и на модерации.
+        """
+        try:
+            # Считаем total
+            count_stmt = select(func.count()).select_from(Opportunity).where(Opportunity.company_id == company_id)
+            total_result = await self.db.execute(count_stmt)
+            total = total_result.scalar_one() or 0
+
+            # Получаем вакансии
+            stmt = (
+                select(Opportunity)
+                .options(
+                    selectinload(Opportunity.opportunity_skills).selectinload(OpportunitySkill.skill),
+                    selectinload(Opportunity.opportunity_tags).selectinload(OpportunityTag.tag),
+                )
+                .where(Opportunity.company_id == company_id)
+                .order_by(Opportunity.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            result = await self.db.execute(stmt)
+            opportunities = list(result.scalars().unique().all())
+
+            return opportunities, total
+
+        except SQLAlchemyError as e:
+            logger.error("OpportunityRepository.get_employer_opportunities error: %s", e)
+            raise RepositoryError() from e
+
+    async def get_employer_detail(
+        self,
+        opportunity_id: UUID,
+        company_id: UUID,
+    ) -> Opportunity | None:
+        """
+        Получить детальную информацию о вакансии для работодателя.
+        Проверяет принадлежность компании.
+        """
+        try:
+            result = await self.db.execute(
+                select(Opportunity)
+                .options(
+                    selectinload(Opportunity.company),
+                    selectinload(Opportunity.opportunity_skills).selectinload(OpportunitySkill.skill),
+                    selectinload(Opportunity.opportunity_tags).selectinload(OpportunityTag.tag),
+                )
+                .where(
+                    Opportunity.id == opportunity_id,
+                    Opportunity.company_id == company_id,
+                )
+            )
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            raise RepositoryError() from e
+
+    async def create_opportunity(
+        self,
+        company_id: UUID,
+        data: dict[str, object],
+        skill_ids: list[UUID] | None = None,
+        tag_ids: list[UUID] | None = None,
+    ) -> Opportunity:
+        """
+        Создать новую вакансию/мероприятие.
+        """
+        try:
+            opportunity = Opportunity(company_id=company_id, **data)
+            self.db.add(opportunity)
+            await self.db.flush()  # Получаем ID
+
+            if skill_ids:
+                for skill_id in skill_ids:
+                    opp_skill = OpportunitySkill(opportunity_id=opportunity.id, skill_id=skill_id)
+                    self.db.add(opp_skill)
+
+            if tag_ids:
+                for tag_id in tag_ids:
+                    opp_tag = OpportunityTag(opportunity_id=opportunity.id, tag_id=tag_id)
+                    self.db.add(opp_tag)
+
+            await self.db.commit()
+            await self.db.refresh(opportunity)
+
+            result = await self.db.execute(
+                select(Opportunity)
+                .options(
+                    selectinload(Opportunity.opportunity_skills).selectinload(OpportunitySkill.skill),
+                    selectinload(Opportunity.opportunity_tags).selectinload(OpportunityTag.tag),
+                )
+                .where(Opportunity.id == opportunity.id)
+            )
+            return result.scalar_one()
+
+        except SQLAlchemyError as e:
+            await self.db.rollback()
+            logger.error("OpportunityRepository.create_opportunity error: %s", e)
+            raise RepositoryError() from e
+
+    async def update_opportunity(
+        self,
+        opportunity: Opportunity,
+        data: dict[str, object],
+        skill_ids: list[UUID] | None = None,
+        tag_ids: list[UUID] | None = None,
+    ) -> Opportunity:
+        """
+        Обновить вакансию/мероприятие.
+        """
+        try:
+            # Обновляем поля
+            for field, value in data.items():
+                if value is not None:
+                    setattr(opportunity, field, value)
+
+            # Обновляем навыки (полная замена)
+            if skill_ids is not None:
+                # Удаляем старые
+                await self.db.execute(delete(OpportunitySkill).where(OpportunitySkill.opportunity_id == opportunity.id))
+                # Добавляем новые
+                for skill_id in skill_ids:
+                    opp_skill = OpportunitySkill(opportunity_id=opportunity.id, skill_id=skill_id)
+                    self.db.add(opp_skill)
+
+            # Обновляем теги (полная замена)
+            if tag_ids is not None:
+                # Удаляем старые
+                await self.db.execute(delete(OpportunityTag).where(OpportunityTag.opportunity_id == opportunity.id))
+                # Добавляем новые
+                for tag_id in tag_ids:
+                    opp_tag = OpportunityTag(opportunity_id=opportunity.id, tag_id=tag_id)
+                    self.db.add(opp_tag)
+
+            await self.db.commit()
+            await self.db.refresh(opportunity)
+
+            # Перезагружаем связи
+            result = await self.db.execute(
+                select(Opportunity)
+                .options(
+                    selectinload(Opportunity.opportunity_skills).selectinload(OpportunitySkill.skill),
+                    selectinload(Opportunity.opportunity_tags).selectinload(OpportunityTag.tag),
+                )
+                .where(Opportunity.id == opportunity.id)
+            )
+            return result.scalar_one()
+
+        except SQLAlchemyError as e:
+            await self.db.rollback()
+            logger.error("OpportunityRepository.update_opportunity error: %s", e)
+            raise RepositoryError() from e
+
+    async def delete_opportunity(self, opportunity: Opportunity) -> None:
+        """
+        Удалить вакансию/мероприятие (мягкое удаление через статус).
+        """
+        try:
+            opportunity.status = OpportunityStatus.CLOSED
+            await self.db.commit()
+        except SQLAlchemyError as e:
+            await self.db.rollback()
+            logger.error("OpportunityRepository.delete_opportunity error: %s", e)
+            raise RepositoryError() from e
+
+    async def publish_opportunity(
+        self,
+        opportunity: Opportunity,
+        requires_moderation: bool = True,
+    ) -> Opportunity:
+        """
+        Опубликовать вакансию (перевод в ACTIVE или ожидание модерации).
+        """
+        try:
+            from datetime import datetime
+
+            if requires_moderation:
+                # Требуется модерация куратора
+                opportunity.status = OpportunityStatus.PLANNED
+                opportunity.is_moderated = False
+            else:
+                # Публикуем сразу
+                opportunity.status = OpportunityStatus.ACTIVE
+                opportunity.is_moderated = True
+                opportunity.published_at = datetime.now(datetime.UTC)  # type: ignore[attr-defined]
+
+            await self.db.commit()
+            await self.db.refresh(opportunity)
+
+            return opportunity
+
+        except SQLAlchemyError as e:
+            await self.db.rollback()
+            logger.error("OpportunityRepository.publish_opportunity error: %s", e)
+            raise RepositoryError() from e
+
+    async def get_company_id_by_user(self, user_id: UUID) -> UUID | None:
+        """
+        Получить ID компании пользователя.
+        """
+        try:
+            result = await self.db.execute(
+                select(Company.id).where(Company.owner_id == user_id, Company.is_active == True)  # noqa: E712
+            )
+            return result.scalar_one_or_none()
+        except SQLAlchemyError as e:
+            logger.error("OpportunityRepository.get_company_id_by_user error: %s", e)
             raise RepositoryError() from e
 
     # ─── Конвертеры ORM → DTO ────────────────────────────────

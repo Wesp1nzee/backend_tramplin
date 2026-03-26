@@ -68,6 +68,29 @@ class RepositoryError(AppError):
     detail = "Database operation failed"
 
 
+# ─── Opportunity Errors (400, 403, 404) ───
+class OpportunityNotFoundError(NotFoundError):
+    detail = "Opportunity not found"
+    error_code = "OPPORTUNITY_NOT_FOUND"
+
+
+class OpportunityOwnershipError(AppError):
+    status_code = status.HTTP_403_FORBIDDEN
+    detail = "You can only manage your own opportunities"
+    error_code = "OPPORTUNITY_OWNERSHIP_REQUIRED"
+
+
+class DraftPublishError(AppError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Cannot publish draft. Please fill in all required fields first."
+    error_code = "DRAFT_PUBLISH_ERROR"
+
+
+class OpportunityValidationError(AppError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    error_code = "OPPORTUNITY_VALIDATION_ERROR"
+
+
 # ─── External Service Errors (502) ───
 class ExternalServiceError(AppError):
     status_code = status.HTTP_502_BAD_GATEWAY

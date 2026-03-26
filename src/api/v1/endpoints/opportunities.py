@@ -1,11 +1,19 @@
 """
-Эндпоинты возможностей — публичный доступ (гостевой режим).
+Эндпоинты возможностей — публичный доступ (гостевой режим) и CRUD для работодателей.
 
-Предоставляют данные для главной страницы:
+Публичные эндпоинты (гостевой режим):
   - GET /api/v1/opportunities         → список карточек
   - GET /api/v1/opportunities/map     → маркеры для карты
   - GET /api/v1/opportunities/filters → фильтры для поиска
   - GET /api/v1/opportunities/{id}    → детальная информация
+
+CRUD для работодателей (требуется авторизация + роль EMPLOYER):
+  - POST   /api/v1/opportunities            → создание вакансии
+  - GET    /api/v1/opportunities/me         → список своих вакансий
+  - GET    /api/v1/opportunities/{id}       → детальная информация (для редактирования)
+  - PATCH  /api/v1/opportunities/{id}       → редактирование
+  - DELETE /api/v1/opportunities/{id}       → удаление/архивирование
+  - POST   /api/v1/opportunities/{id}/publish → публикация черновика
 
 Город определяется автоматически по IP пользователя если не передан явно.
 """
@@ -13,18 +21,26 @@
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.v1.deps import get_db
+from src.api.v1.deps import RoleChecker, get_db
+from src.models.enums import UserRole
 from src.models.user import User
 from src.repositories.opportunity import OpportunityRepository, _extract_client_ip
 from src.schemas.opportunity import (
+    OpportunityCreate,
     OpportunityDetail,
+    OpportunityEmployerDetail,
+    OpportunityEmployerListResponse,
     OpportunityFiltersResponse,
     OpportunityListResponse,
     OpportunityMapResponse,
+    OpportunityPublishRequest,
+    OpportunityPublishResponse,
+    OpportunityUpdate,
 )
 from src.services.ip_geo import IPGeolocationService
 from src.services.opportunity import OpportunityService
@@ -62,7 +78,21 @@ async def get_current_user_optional(
     return None
 
 
-# ─── Хелпер: определение города ──────────────────────────────
+# ─── RBAC: Проверка роли EMPLOYER ─────────────────────────────
+
+require_employer = RoleChecker([UserRole.EMPLOYER, UserRole.CURATOR])
+
+
+async def _get_user_company_id(user: User, opportunity_service: OpportunityService) -> UUID:
+    """
+    Получить ID компании текущего пользователя.
+    """
+    company_id = await opportunity_service.opportunity_repo.get_company_id_by_user(user.id)
+    if not company_id:
+        from src.core.exceptions import NotFoundError
+
+        raise NotFoundError(detail="Company not found. Please create your company profile first.")
+    return company_id
 
 
 async def _resolve_city(
@@ -88,11 +118,6 @@ async def _resolve_city(
         default_city="Москва",
     )
     return resolved_city, resolved_city, from_ip
-
-
-# ═════════════════════════════════════════════════════════════
-#  ЭНДПОИНТЫ (порядок важен!)
-# ═════════════════════════════════════════════════════════════
 
 
 @router.get(
@@ -269,3 +294,248 @@ async def get_opportunity_detail(
     opportunity_service: OpportunityService = Depends(get_opportunity_service),
 ) -> OpportunityDetail:
     return await opportunity_service.get_detail(opportunity_id, current_user)
+
+
+@router.post(
+    "",
+    response_model=OpportunityEmployerDetail,
+    status_code=status.HTTP_201_CREATED,
+    summary="Создание вакансии",
+    description=(
+        "Создание новой вакансии или мероприятия от имени работодателя.\n\n"
+        "**Требуемая роль:** EMPLOYER\n\n"
+        "**Обязательные поля:**\n"
+        "- `type` — тип: vacancy, internship, mentoring, event\n"
+        "- `title` — заголовок (1-200 символов)\n"
+        "- `work_format` — формат работы: office, hybrid, remote, online\n\n"
+        "**Опциональные поля:**\n"
+        "- Описание, требования, обязанности\n"
+        "- Зарплатная вилка (min, max, currency)\n"
+        "- Геолокация (город, адрес, координаты)\n"
+        "- Контакты для связи\n"
+        "- Навыки и теги (списки UUID)\n"
+        "- Даты (публикации, окончания, для мероприятий)\n\n"
+        "Вакансия создаётся в статусе **DRAFT**. Для публикации используйте `POST /opportunities/{id}/publish`."
+    ),
+)
+async def create_opportunity(
+    data: OpportunityCreate,
+    current_user: User = Depends(require_employer),
+    opportunity_service: OpportunityService = Depends(get_opportunity_service),
+) -> OpportunityEmployerDetail:
+    """
+    Создание вакансии/мероприятия.
+    """
+    company_id = await _get_user_company_id(current_user, opportunity_service)
+
+    return await opportunity_service.create_opportunity(
+        company_id=company_id,
+        data=data,
+    )
+
+
+@router.get(
+    "/me",
+    response_model=OpportunityEmployerListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Список своих вакансий",
+    description=(
+        "Получение списка всех вакансий/мероприятий текущего работодателя с расширенной статистикой.\n\n"
+        "**Требуемая роль:** EMPLOYER\n\n"
+        "Возвращает все вакансии независимо от статуса:\n"
+        "- DRAFT — черновики\n"
+        "- ACTIVE — активные\n"
+        "- PAUSED — приостановленные\n"
+        "- CLOSED — закрытые/архивные\n"
+        "- PLANNED — на модерации\n\n"
+        "**Статистика включает:**\n"
+        "- Количество просмотров\n"
+        "- Количество откликов\n"
+        "- Количество добавлений в избранное"
+    ),
+)
+async def get_my_opportunities(
+    limit: int = Query(default=50, ge=1, le=200, description="Количество записей"),
+    offset: int = Query(default=0, ge=0, description="Смещение"),
+    current_user: User = Depends(require_employer),
+    opportunity_service: OpportunityService = Depends(get_opportunity_service),
+) -> OpportunityEmployerListResponse:
+    """
+    Список своих вакансий с расширенной статистикой.
+    """
+    company_id = await _get_user_company_id(current_user, opportunity_service)
+
+    return await opportunity_service.get_employer_opportunities(
+        company_id=company_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/{opportunity_id}",
+    response_model=OpportunityEmployerDetail,
+    status_code=status.HTTP_200_OK,
+    summary="Детали вакансии (для редактирования)",
+    description=(
+        "Получение полной информации о вакансии для редактирования.\n\n"
+        "**Требуемая роль:** EMPLOYER + владелец вакансии\n\n"
+        "Возвращает все поля вакансии включая:\n"
+        "- ID навыков и тегов\n"
+        "- Координаты (lat, lng)\n"
+        "- Расширенную статистику\n"
+        "- Комментарий модератора (если есть)\n\n"
+        "**Важно:** Доступно только для владельца вакансии."
+    ),
+)
+async def get_employer_opportunity_detail(
+    opportunity_id: str,
+    current_user: User = Depends(require_employer),
+    opportunity_service: OpportunityService = Depends(get_opportunity_service),
+) -> OpportunityEmployerDetail:
+    """
+    Детальная информация для редактирования.
+    """
+    company_id = await _get_user_company_id(current_user, opportunity_service)
+
+    try:
+        opp_uuid = UUID(opportunity_id)
+    except ValueError as e:
+        from src.core.exceptions import OpportunityNotFoundError
+
+        raise OpportunityNotFoundError() from e
+
+    return await opportunity_service.get_employer_detail(
+        opportunity_id=opp_uuid,
+        company_id=company_id,
+    )
+
+
+@router.patch(
+    "/{opportunity_id}",
+    response_model=OpportunityEmployerDetail,
+    status_code=status.HTTP_200_OK,
+    summary="Редактирование вакансии",
+    description=(
+        "Обновление существующей вакансии/мероприятия.\n\n"
+        "**Требуемая роль:** EMPLOYER + владелец вакансии\n\n"
+        "**Можно обновлять:**\n"
+        "- Основную информацию (title, description, requirements, responsibilities)\n"
+        "- Формат работы, уровень опыта, тип занятости\n"
+        "- Зарплатные параметры\n"
+        "- Геолокацию (город, адрес, координаты)\n"
+        "- Контакты\n"
+        "- Навыки и теги (полная замена списков)\n"
+        "- Даты\n\n"
+        "**Нельзя изменить через PATCH:**\n"
+        "- `type` — тип возможности (только при создании)\n"
+        "- Статус (используйте `POST /opportunities/{id}/publish`)\n\n"
+        "**Важно:** Доступно только для владельца вакансии."
+    ),
+)
+async def update_opportunity(
+    opportunity_id: str,
+    data: OpportunityUpdate,
+    current_user: User = Depends(require_employer),
+    opportunity_service: OpportunityService = Depends(get_opportunity_service),
+) -> OpportunityEmployerDetail:
+    """
+    Редактирование вакансии.
+    """
+    company_id = await _get_user_company_id(current_user, opportunity_service)
+
+    try:
+        opp_uuid = UUID(opportunity_id)
+    except ValueError as e:
+        from src.core.exceptions import OpportunityNotFoundError
+
+        raise OpportunityNotFoundError() from e
+
+    return await opportunity_service.update_opportunity(
+        opportunity_id=opp_uuid,
+        company_id=company_id,
+        data=data,
+    )
+
+
+@router.delete(
+    "/{opportunity_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удаление вакансии",
+    description=(
+        "Мягкое удаление вакансии/мероприятия (перевод в статус CLOSED).\n\n"
+        "**Требуемая роль:** EMPLOYER + владелец вакансии\n\n"
+        "Вакансия не удаляется физически из БД, а помечается как закрытая.\n"
+        "Закрытые вакансии не отображаются в публичном каталоге.\n\n"
+        "**Важно:** Доступно только для владельца вакансии."
+    ),
+)
+async def delete_opportunity(
+    opportunity_id: str,
+    current_user: User = Depends(require_employer),
+    opportunity_service: OpportunityService = Depends(get_opportunity_service),
+) -> None:
+    """
+    Удаление/архивирование вакансии.
+    """
+    company_id = await _get_user_company_id(current_user, opportunity_service)
+
+    try:
+        opp_uuid = UUID(opportunity_id)
+    except ValueError as e:
+        from src.core.exceptions import OpportunityNotFoundError
+
+        raise OpportunityNotFoundError() from e
+
+    await opportunity_service.delete_opportunity(
+        opportunity_id=opp_uuid,
+        company_id=company_id,
+    )
+
+
+@router.post(
+    "/{opportunity_id}/publish",
+    response_model=OpportunityPublishResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Публикация черновика",
+    description=(
+        "Публикация вакансии (перевод из DRAFT в ACTIVE).\n\n"
+        "**Требуемая роль:** EMPLOYER + владелец вакансии\n\n"
+        "**Логика модерации:**\n"
+        "- Если `requires_moderation=true` (по умолчанию) → статус PLANNED, ожидание куратора\n"
+        "- Если `requires_moderation=false` → статус ACTIVE сразу (если есть права)\n\n"
+        "**Проверки перед публикацией:**\n"
+        "- Заполнены обязательные поля (title, description, work_format)\n"
+        "- Вакансия в статусе DRAFT\n\n"
+        "**Важно:** Доступно только для владельца вакансии."
+    ),
+)
+async def publish_opportunity(
+    opportunity_id: str,
+    data: OpportunityPublishRequest | None = None,
+    current_user: User = Depends(require_employer),
+    opportunity_service: OpportunityService = Depends(get_opportunity_service),
+) -> OpportunityPublishResponse:
+    """
+    Публикация черновика.
+    """
+    company_id = await _get_user_company_id(current_user, opportunity_service)
+
+    try:
+        opp_uuid = UUID(opportunity_id)
+    except ValueError as e:
+        from src.core.exceptions import OpportunityNotFoundError
+
+        raise OpportunityNotFoundError() from e
+
+    # По умолчанию требуется модерация
+    requires_moderation = True
+    if data and hasattr(data, "curator_comment") and data.curator_comment:
+        # Если есть комментарий — сохраняем (можно добавить в сервис)
+        logger.info("Curator comment provided for opportunity %s: %s", opp_uuid, data.curator_comment)
+
+    return await opportunity_service.publish_opportunity(
+        opportunity_id=opp_uuid,
+        company_id=company_id,
+        requires_moderation=requires_moderation,
+    )
