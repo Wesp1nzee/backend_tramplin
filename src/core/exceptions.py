@@ -91,6 +91,42 @@ class OpportunityValidationError(AppError):
     error_code = "OPPORTUNITY_VALIDATION_ERROR"
 
 
+# ─── Application Errors (400, 403, 404, 409) ───
+class ApplicationNotFoundError(NotFoundError):
+    detail = "Application not found"
+    error_code = "APPLICATION_NOT_FOUND"
+
+
+class ApplicationAlreadyExistsError(AppError):
+    status_code = status.HTTP_409_CONFLICT
+    detail = "You have already applied to this opportunity"
+    error_code = "APPLICATION_ALREADY_EXISTS"
+
+
+class ApplicationWithdrawNotAllowedError(AppError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Cannot withdraw application with current status"
+    error_code = "APPLICATION_WITHDRAW_NOT_ALLOWED"
+
+
+class InvalidStatusTransitionError(AppError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Invalid status transition"
+    error_code = "INVALID_STATUS_TRANSITION"
+
+
+class OpportunityNotActiveError(AppError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Cannot apply to inactive opportunity"
+    error_code = "OPPORTUNITY_NOT_ACTIVE"
+
+
+class CompanyNotVerifiedError(AppError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Cannot apply to unverified company"
+    error_code = "COMPANY_NOT_VERIFIED"
+
+
 # ─── External Service Errors (502) ───
 class ExternalServiceError(AppError):
     status_code = status.HTTP_502_BAD_GATEWAY

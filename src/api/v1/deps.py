@@ -11,8 +11,10 @@ from src.core.security import decode_token
 from src.db.session import get_db
 from src.models.enums import UserRole
 from src.models.user import User
+from src.repositories.application import ApplicationRepository
 from src.repositories.glossary import GlossaryRepository
 from src.repositories.user import UserRepository
+from src.services.application import ApplicationService
 from src.services.auth import AuthService
 from src.services.glossary import GlossaryService
 from src.services.user import UserService
@@ -28,6 +30,8 @@ __all__ = [
     "RoleChecker",
     "get_glossary_repository",
     "get_glossary_service",
+    "get_application_repository",
+    "get_application_service",
 ]
 
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -145,3 +149,22 @@ def get_glossary_service(
     Dependency для получения сервиса глоссария.
     """
     return GlossaryService(glossary_repo)
+
+
+# ─── Application Dependencies ────────────────────────────────────
+
+
+def get_application_repository(db: AsyncSession = Depends(get_db)) -> ApplicationRepository:
+    """
+    Dependency для получения репозитория откликов.
+    """
+    return ApplicationRepository(db)
+
+
+def get_application_service(
+    application_repo: ApplicationRepository = Depends(get_application_repository),
+) -> ApplicationService:
+    """
+    Dependency для получения сервиса откликов.
+    """
+    return ApplicationService(application_repo)

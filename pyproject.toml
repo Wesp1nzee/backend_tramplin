@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     #  Core API & Server
-    "fastapi>=0.110.0",
+    "fastapi>=0.135.2",
     "granian[reload]>=2.7.2",
     "pydantic[email]>=2.6.0",
     "pydantic-settings>=2.2.0",
@@ -21,7 +21,7 @@ dependencies = [
     "argon2-cffi>=25.1.0",
     "pyjwt[crypto]>=2.12.1",
     #  Cache & Messaging
-    "redis[hiredis]>=7.3.0",
+    "redis[hiredis]>=7.4.0",
     "faststream[rabbit]>=0.4.0",
     #  Rate Limiting ──
     "slowapi>=0.1.9",
@@ -36,7 +36,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     # Linting & Formatting
-    "ruff>=0.3.0",
+    "ruff>=0.15.8",
     "mypy>=1.9.0",
 
     # Testing
@@ -49,7 +49,7 @@ dev = [
 
     # Security Scanning
     "bandit>=1.8.0",
-    "pip-audit>=2.7.0"
+    "pip-audit>=2.10.0"
 ]
 
 [tool.uv]

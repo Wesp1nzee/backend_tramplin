@@ -3,11 +3,9 @@ from collections.abc import AsyncGenerator
 import fakeredis.aioredis
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
-    async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.pool import NullPool
@@ -33,33 +31,30 @@ async def db_engine() -> AsyncGenerator[AsyncEngine]:
 
 @pytest_asyncio.fixture(scope="function")
 async def db_session(db_engine: AsyncEngine) -> AsyncGenerator[AsyncSession]:
-    """Создаёт сессию БД для каждого теста + очистка данных."""
-    async_session = async_sessionmaker(db_engine, expire_on_commit=False, class_=AsyncSession)
-    session = async_session()
-    try:
-        await session.execute(text("TRUNCATE TABLE users, companies RESTART IDENTITY CASCADE"))
-        await session.commit()
-        yield session
-    finally:
-        await session.close()
+    # Создаем сессию с автоматическим откатом, чтобы база всегда была чистой
+    connection = await db_engine.connect()
+    trans = await connection.begin()
+
+    # join_transaction_mode="create_savepoint" позволяет делать commit внутри кода,
+    # но на самом деле в базу ничего не запишется до конца теста
+    session = AsyncSession(bind=connection, expire_on_commit=False, join_transaction_mode="create_savepoint")
+
+    yield session
+
+    await session.close()
+    await trans.rollback()
+    await connection.close()
 
 
 @pytest_asyncio.fixture(scope="function")
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient]:
-    """Тестовый клиент с переопределённой сессией БД."""
-
+    # Важно: переопределяем зависимость именно той сессией, которую используем в фикстурах данных
     async def _override_get_db() -> AsyncGenerator[AsyncSession]:
         yield db_session
 
     app.dependency_overrides[get_db] = _override_get_db
-    app.state.limiter.enabled = False
 
-    limiter = app.state.limiter
-    if hasattr(limiter, "_storage") and hasattr(limiter._storage, "storage"):
-        limiter._storage.storage.clear()
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 
     app.dependency_overrides.clear()

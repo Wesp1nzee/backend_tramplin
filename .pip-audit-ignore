@@ -2,3 +2,7 @@
 # Фикс ожидается в версии 2.19.3+, пока игнорируем
 # Подробнее: https://github.com/advisories/GHSA-5239-wwwm-4pmq
 GHSA-5239-wwwm-4pmq
+
+# CVE-2026-25645 в requests
+# Ожидается обновление requests, пока игнорируем
+CVE-2026-25645

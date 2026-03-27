@@ -7,6 +7,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
+from src.api.v1.endpoints.applications import applicant_router, employer_applications_router, employer_opportunities_router
 from src.api.v1.endpoints.auth import router as auth_router
 from src.api.v1.endpoints.companies import router as companies_router
 from src.api.v1.endpoints.glossary import router as glossary_router
@@ -104,13 +105,16 @@ def create_app() -> FastAPI:
         return response
 
     setup_exception_handlers(app)
+    app.include_router(applicant_router, prefix=settings.API_V1_STR)
+    app.include_router(employer_opportunities_router, prefix=settings.API_V1_STR)
+    app.include_router(employer_applications_router, prefix=settings.API_V1_STR)
     app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(companies_router, prefix=settings.API_V1_STR)
     app.include_router(opportunities_router, prefix=settings.API_V1_STR)
     app.include_router(users_router, prefix=settings.API_V1_STR)
     app.include_router(glossary_router, prefix=settings.API_V1_STR)
 
-    logger.info("API routers registered", routes=["auth", "companies", "glossary", "opportunities", "users"])
+    logger.info("API routers registered", routes=["applications", "auth", "companies", "glossary", "opportunities", "users"])
 
     return app
 

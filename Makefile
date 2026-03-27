@@ -20,7 +20,7 @@ security-bandit:
 
 # Аудит зависимостей на CVE (pip-audit)
 security-audit:
-	uv run pip-audit --ignore-vuln GHSA-5239-wwwm-4pmq
+	uv run pip-audit --ignore-vuln GHSA-5239-wwwm-4pmq --ignore-vuln CVE-2026-25645
 
 # Запуск всех проверок безопасности
 security: security-bandit security-audit
