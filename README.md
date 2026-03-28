@@ -57,6 +57,52 @@ uv run granian src.main:app --interface asgi --reload
 | `http://localhost:8000/api/docs` | Swagger UI (автосгенерированная документация) |
 | `http://localhost:8000/health` | Health check для Docker/K8s |
 
+### Новые эндпоинты (MVP)
+
+#### 🔒 Профиль и приватность
+
+| Метод | Эндпоинт | Описание |
+|-------|----------|----------|
+| `GET` | `/api/v1/users/{user_id}` | Публичный профиль пользователя с учётом настроек приватности |
+| `GET` | `/api/v1/users/applicants/search` | Поиск соискателей (EMPLOYER/CURATOR) |
+
+**Приватность:**
+- Если `public_profile=False`: имя, контакты и CV скрыты
+- Если `show_contacts=False`: телефон и соцсети скрыты
+- Владелец профиля видит все данные полностью
+
+#### 📁 Загрузка файлов
+
+| Метод | Эндпоинт | Описание | Auth |
+|-------|----------|----------|------|
+| `POST` | `/api/v1/uploads/cv` | Загрузка резюме (PDF, макс. 5MB) | APPLICANT |
+| `POST` | `/api/v1/uploads/media` | Загрузка медиа (JPG/PNG/WEBP/MP4, макс. 10MB) | EMPLOYER/CURATOR |
+
+**Возвращает:**
+```json
+{
+  "url": "http://localhost:8000/static/uploads/cvs/uuid.pdf",
+  "filename": "uuid.pdf",
+  "file_type": "application/pdf",
+  "file_size": 123456
+}
+```
+
+#### 💡 Рекомендации
+
+| Метод | Эндпоинт | Описание | Auth |
+|-------|----------|----------|------|
+| `POST` | `/api/v1/recommendations` | Рекомендовать вакансию контакту | APPLICANT |
+| `GET` | `/api/v1/recommendations/sent` | Список отправленных рекомендаций | APPLICANT |
+| `GET` | `/api/v1/recommendations/received` | Список полученных рекомендаций | APPLICANT |
+| `PATCH` | `/api/v1/recommendations/{id}/read` | Отметить рекомендацию как прочитанную | APPLICANT |
+
+**Требования:**
+- Между отправителем и получателем должна быть связь `Contact` со статусом `ACCEPTED`
+- Вакансия должна быть активной (`ACTIVE`)
+- Получатель должен быть соискателем (`APPLICANT`)
+- Нельзя рекомендовать самому себе
+
 ---
 
 ## 🛠 Разработка

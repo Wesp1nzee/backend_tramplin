@@ -89,9 +89,17 @@ class Settings(BaseSettings):
     # RabbitMQ
     RABBITMQ_URL: str = "amqp://guest:guest@mq:5672/"
 
+    # --- S3 Storage Settings ---
+    S3_ENDPOINT_URL: str = "http://localhost:9000"
+    S3_ACCESS_KEY: str = "minioadmin"
+    S3_SECRET_KEY: str = "minioadmin"
+    S3_BUCKET_NAME: str = "tramplin-uploads"
+    S3_REGION: str = "us-east-1"
+
     # --- Business Logic Defaults ---
     MIN_PASSWORD_LENGTH: int = 8
-    MAX_IMAGE_SIZE_MB: int = 5
+    MAX_IMAGE_SIZE_MB: int = 5  # Для CV
+    MAX_MEDIA_SIZE_MB: int = 10  # Для изображений и видео
 
     DADATA_SECRET_KEY: str
     DADATA_API_KEY: str

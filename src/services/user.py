@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -14,6 +15,126 @@ from src.models.skill import ProfileSkill, Skill
 from src.models.user import Profile, User
 from src.repositories.user import UserRepository
 from src.schemas.user import CuratorCreate, PasswordChangeRequest, UserUpdate
+
+
+class PrivacyFilterService:
+    """
+    Сервис для применения настроек приватности к профилю пользователя.
+
+    Все методы статические, так как не требуют состояния.
+    """
+
+    @staticmethod
+    def apply_privacy_filters(
+        profile: Profile,
+        viewer: User | None,
+    ) -> dict[str, Any]:
+        """
+        Применяет настройки приватности к профилю в зависимости от того, кто смотрит.
+
+        Args:
+            profile: Профиль пользователя
+            viewer: Текущий пользователь (None для неавторизованных)
+
+        Returns:
+            dict: Словарь с данными профиля с применёнными фильтрами приватности
+
+        Rules:
+            - Если viewer == profile.user: Возвращает все данные
+            - Если privacy_settings.public_profile == False: Скрывает first_name, last_name,
+              contacts, cv_url (показывает "Hidden" или null)
+            - Если privacy_settings.show_contacts == False: Скрывает phone, social_links
+              для не-контактов
+            - Если privacy_settings.show_applications == False: Скрывает историю откликов
+        """
+        # Базовые настройки приватности
+        privacy_settings = profile.privacy_settings or {
+            "public_profile": True,
+            "show_contacts": False,
+            "show_github": True,
+            "show_applications": False,
+        }
+
+        # Если владелец смотрит свой профиль — возвращаем всё
+        if viewer and viewer.id == profile.user_id:
+            return {
+                "first_name": profile.first_name,
+                "last_name": profile.last_name,
+                "middle_name": profile.middle_name,
+                "university": profile.university,
+                "faculty": profile.faculty,
+                "specialization": profile.specialization,
+                "graduation_year": profile.graduation_year,
+                "study_year": profile.study_year,
+                "headline": profile.headline,
+                "bio": profile.bio,
+                "avatar_url": profile.avatar_url,
+                "phone": profile.phone,
+                "social_links": profile.social_links or {},
+                "portfolio_url": profile.portfolio_url,
+                "cv_url": profile.cv_url,
+                "privacy_settings": privacy_settings,
+                "career_preferences": profile.career_preferences or {},
+                "skills": [ps.skill.name for ps in profile.profile_skills if hasattr(ps, "skill")],
+                "show_full_data": True,
+            }
+
+        # Если профиль скрыт от всех — возвращаем минимальные данные
+        if not privacy_settings.get("public_profile", True):
+            return {
+                "first_name": "Скрыто",
+                "last_name": "Скрыто",
+                "middle_name": None,
+                "university": None,
+                "faculty": None,
+                "specialization": None,
+                "graduation_year": None,
+                "study_year": None,
+                "headline": None,
+                "bio": None,
+                "avatar_url": profile.avatar_url,
+                "phone": None,
+                "social_links": {},
+                "portfolio_url": None,
+                "cv_url": None,
+                "privacy_settings": privacy_settings,
+                "career_preferences": {},
+                "skills": [],
+                "show_full_data": False,
+            }
+
+        # Профиль публичный, применяем частичные ограничения
+        result = {
+            "first_name": profile.first_name,
+            "last_name": profile.last_name,
+            "middle_name": profile.middle_name,
+            "university": profile.university,
+            "faculty": profile.faculty,
+            "specialization": profile.specialization,
+            "graduation_year": profile.graduation_year,
+            "study_year": profile.study_year,
+            "headline": profile.headline,
+            "bio": profile.bio,
+            "avatar_url": profile.avatar_url,
+            "portfolio_url": profile.portfolio_url,
+            "privacy_settings": privacy_settings,
+            "career_preferences": profile.career_preferences or {},
+            "skills": [ps.skill.name for ps in profile.profile_skills if hasattr(ps, "skill")],
+            "show_full_data": False,
+        }
+
+        # Скрываем контакты если show_contacts == False
+        if not privacy_settings.get("show_contacts", False):
+            result["phone"] = None
+            result["social_links"] = {}
+        else:
+            result["phone"] = profile.phone
+            result["social_links"] = profile.social_links or {}
+
+        # CV всегда скрываем для не-владельцев (это чувствительный документ)
+        result["cv_url"] = None
+
+        return result
 
 
 class UserService:

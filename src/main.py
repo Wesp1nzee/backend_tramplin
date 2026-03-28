@@ -12,6 +12,8 @@ from src.api.v1.endpoints.auth import router as auth_router
 from src.api.v1.endpoints.companies import router as companies_router
 from src.api.v1.endpoints.glossary import router as glossary_router
 from src.api.v1.endpoints.opportunities import router as opportunities_router
+from src.api.v1.endpoints.recommendations import router as recommendations_router
+from src.api.v1.endpoints.uploads import router as uploads_router
 from src.api.v1.endpoints.users import router as users_router
 from src.core.config import settings
 from src.core.exceptions import setup_exception_handlers
@@ -113,8 +115,13 @@ def create_app() -> FastAPI:
     app.include_router(opportunities_router, prefix=settings.API_V1_STR)
     app.include_router(users_router, prefix=settings.API_V1_STR)
     app.include_router(glossary_router, prefix=settings.API_V1_STR)
+    app.include_router(uploads_router, prefix=settings.API_V1_STR)
+    app.include_router(recommendations_router, prefix=settings.API_V1_STR)
 
-    logger.info("API routers registered", routes=["applications", "auth", "companies", "glossary", "opportunities", "users"])
+    logger.info(
+        "API routers registered",
+        routes=["applications", "auth", "companies", "glossary", "opportunities", "users", "uploads", "recommendations"],
+    )
 
     return app
 

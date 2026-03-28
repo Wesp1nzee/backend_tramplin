@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from src.api.v1.deps import RoleChecker, get_current_user, get_user_service
 from src.models.enums import UserRole
 from src.models.user import User
 from src.schemas.user import (
+    ApplicantPublicProfile,
+    ApplicantSearchItem,
+    ApplicantSearchResponse,
     CuratorCreate,
     EmployerVerifyRequest,
     PasswordChangeRequest,
@@ -11,7 +14,7 @@ from src.schemas.user import (
     UserResponse,
     UserUpdate,
 )
-from src.services.user import UserService
+from src.services.user import PrivacyFilterService, UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -118,6 +121,121 @@ async def change_password(
         password_request=password_request,
     )
     return {"message": "Password changed successfully"}
+
+
+@router.get(
+    "/{user_id}",
+    response_model=ApplicantPublicProfile,
+    status_code=status.HTTP_200_OK,
+    summary="Публичный профиль пользователя",
+    description="Получение публичного профиля пользователя с учётом настроек приватности.",
+)
+async def get_public_user_profile(
+    user_id: str,
+    current_user: User | None = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+) -> ApplicantPublicProfile:
+    """
+    Получение публичного профиля пользователя.
+
+    Возвращает данные профиля с применёнными настройками приватности:
+    - Если public_profile=False: скрывает имя, контакты, CV
+    - Если show_contacts=False: скрывает телефон и соцсети
+    - Владелец профиля видит все данные полностью
+
+    Требуется авторизация (любой авторизованный пользователь).
+    """
+    user_with_profile = await user_service.get_user_with_profile(user_id)
+
+    if not user_with_profile or not user_with_profile.profile:
+        from src.core.exceptions import NotFoundError
+
+        raise NotFoundError(detail="User profile not found")
+
+    # Применяем фильтры приватности
+    filtered_profile = PrivacyFilterService.apply_privacy_filters(
+        profile=user_with_profile.profile,
+        viewer=current_user,
+    )
+
+    return ApplicantPublicProfile(
+        id=user_with_profile.id,
+        **filtered_profile,
+    )
+
+
+# Эндпоинты для поиска соискателей (только для работодателей и кураторов)
+require_employer_or_curator = RoleChecker([UserRole.EMPLOYER, UserRole.CURATOR])
+
+
+@router.get(
+    "/applicants/search",
+    response_model=ApplicantSearchResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Поиск соискателей",
+    description="Поиск соискателей по навыкам, вузу, году выпуска и городу. Доступно только работодателям и кураторам.",
+    dependencies=[Depends(require_employer_or_curator)],
+)
+async def search_applicants(
+    skills: str | None = Query(None, description="Навыки через запятую (например: Python,Django,PostgreSQL)"),
+    university: str | None = Query(None, description="Название вуза"),
+    graduation_year: int | None = Query(None, ge=1990, le=2100, description="Год выпуска"),
+    city: str | None = Query(None, description="Город"),
+    limit: int = Query(default=50, ge=1, le=100, description="Лимит записей"),
+    offset: int = Query(default=0, ge=0, description="Смещение"),
+    user_service: UserService = Depends(get_user_service),
+) -> ApplicantSearchResponse:
+    """
+    Поиск соискателей по фильтрам.
+
+    Доступно только пользователям с ролями EMPLOYER и CURATOR.
+    Возвращает только соискателей с public_profile=True.
+
+    Параметры:
+    - skills: Список навыков через запятую
+    - university: Название вуза (частичное совпадение)
+    - graduation_year: Год выпуска
+    - city: Город
+    - limit: Лимит записей (1-100)
+    - offset: Смещение для пагинации
+    """
+    # Парсим навыки из строки
+    skills_list = skills.split(",") if skills else None
+
+    # Поиск через репозиторий
+    users, total = await user_service.user_repo.search_applicants(
+        skills=skills_list,
+        university=university,
+        graduation_year=graduation_year,
+        city=city,
+        limit=limit,
+        offset=offset,
+    )
+
+    # Формируем ответ
+    items = []
+    for user in users:
+        if user.profile:
+            items.append(
+                ApplicantSearchItem(
+                    id=user.id,
+                    email=user.email,
+                    first_name=user.profile.first_name,
+                    last_name=user.profile.last_name,
+                    university=user.profile.university,
+                    graduation_year=user.profile.graduation_year,
+                    skills=[ps.skill.name for ps in user.profile.profile_skills if hasattr(ps, "skill")],
+                    avatar_url=user.profile.avatar_url,
+                    headline=user.profile.headline,
+                )
+            )
+
+    return ApplicantSearchResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 # Эндпоинты для кураторов (только для администраторов)

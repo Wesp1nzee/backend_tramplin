@@ -13,10 +13,13 @@ from src.models.enums import UserRole
 from src.models.user import User
 from src.repositories.application import ApplicationRepository
 from src.repositories.glossary import GlossaryRepository
+from src.repositories.recommendation import RecommendationRepository
 from src.repositories.user import UserRepository
 from src.services.application import ApplicationService
 from src.services.auth import AuthService
 from src.services.glossary import GlossaryService
+from src.services.recommendation import RecommendationService
+from src.services.upload import UploadService
 from src.services.user import UserService
 from src.utils.cache import token_blacklist
 
@@ -32,6 +35,9 @@ __all__ = [
     "get_glossary_service",
     "get_application_repository",
     "get_application_service",
+    "get_recommendation_repository",
+    "get_recommendation_service",
+    "get_upload_service",
 ]
 
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -168,3 +174,32 @@ def get_application_service(
     Dependency для получения сервиса откликов.
     """
     return ApplicationService(application_repo)
+
+
+# ─── Recommendation Dependencies ────────────────────────────────────
+
+
+def get_recommendation_repository(db: AsyncSession = Depends(get_db)) -> RecommendationRepository:
+    """
+    Dependency для получения репозитория рекомендаций.
+    """
+    return RecommendationRepository(db)
+
+
+def get_recommendation_service(
+    recommendation_repo: RecommendationRepository = Depends(get_recommendation_repository),
+) -> RecommendationService:
+    """
+    Dependency для получения сервиса рекомендаций.
+    """
+    return RecommendationService(recommendation_repo)
+
+
+# ─── Upload Dependencies ────────────────────────────────────
+
+
+def get_upload_service() -> UploadService:
+    """
+    Dependency для получения сервиса загрузок.
+    """
+    return UploadService()

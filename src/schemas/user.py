@@ -189,3 +189,67 @@ class EmployerVerifyRequest(SchemaBase):
     """Запрос на верификацию работодателя."""
 
     is_verified: bool = Field(..., description="Статус верификации")
+
+
+class ApplicantPublicProfile(SchemaBase):
+    """
+    Публичный профиль соискателя с учётом настроек приватности.
+
+    Используется для отображения профиля другим пользователям.
+    Если public_profile=False, большинство полей будут скрыты.
+    """
+
+    id: uuid.UUID
+    first_name: str
+    last_name: str
+    middle_name: str | None = None
+    university: str | None = None
+    faculty: str | None = None
+    specialization: str | None = None
+    graduation_year: int | None = None
+    study_year: int | None = None
+    headline: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = None
+    phone: str | None = None
+    social_links: dict[str, str] = {}
+    portfolio_url: str | None = None
+    cv_url: str | None = None
+    skills: list[str] = []
+    privacy_settings: dict[str, Any] = {}
+    career_preferences: dict[str, Any] = {}
+    show_full_data: bool = False
+
+
+class ApplicantSearchRequest(SchemaBase):
+    """Запрос на поиск соискателей."""
+
+    skills: list[str] | None = None
+    university: str | None = None
+    graduation_year: int | None = Field(None, ge=1990, le=2100)
+    city: str | None = None
+    limit: int = Field(default=50, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
+
+
+class ApplicantSearchItem(SchemaBase):
+    """Элемент списка в поиске соискателей."""
+
+    id: uuid.UUID
+    email: str
+    first_name: str
+    last_name: str
+    university: str | None = None
+    graduation_year: int | None = None
+    skills: list[str] = []
+    avatar_url: str | None = None
+    headline: str | None = None
+
+
+class ApplicantSearchResponse(SchemaBase):
+    """Ответ поиска соискателей с пагинацией."""
+
+    items: list[ApplicantSearchItem]
+    total: int
+    limit: int
+    offset: int
