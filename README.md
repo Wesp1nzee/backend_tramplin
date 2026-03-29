@@ -103,6 +103,88 @@ uv run granian src.main:app --interface asgi --reload
 - Получатель должен быть соискателем (`APPLICANT`)
 - Нельзя рекомендовать самому себе
 
+#### ⭐ Избранное (Favorites)
+
+| Метод | Эндпоинт | Описание | Auth |
+|-------|----------|----------|------|
+| `POST` | `/api/v1/favorites/sync` | Синхронизация localStorage с БД при логине | APPLICANT |
+| `GET` | `/api/v1/favorites/opportunities` | Список избранных вакансий | APPLICANT |
+| `GET` | `/api/v1/favorites/companies` | Список избранных компаний | APPLICANT |
+| `POST` | `/api/v1/favorites/opportunities/{id}` | Добавить вакансию в избранное | APPLICANT |
+| `DELETE` | `/api/v1/favorites/opportunities/{id}` | Удалить вакансию из избранного | APPLICANT |
+| `POST` | `/api/v1/favorites/companies/{id}` | Добавить компанию в избранное | APPLICANT |
+| `DELETE` | `/api/v1/favorites/companies/{id}` | Удалить компанию из избранного | APPLICANT |
+
+**Синхронизация:**
+- Неавторизованные пользователи хранят избранное в localStorage
+- При логине фронтенд отправляет `POST /favorites/sync` с `{opportunity_ids, company_ids}`
+- Бэкенд объединяет с БД без дубликатов, возвращает итоговый список
+
+**Избранные компании на карте:**
+- Маркеры компаний из избранного помечаются `is_favorite_company: true`
+- Фронтенд может отображать их отдельным цветом/иконкой
+
+#### 🎓 Мероприятия (Events)
+
+| Метод | Эндпоинт | Описание | Auth |
+|-------|----------|----------|------|
+| `GET` | `/api/v1/events/{id}/info` | Информация о мероприятии | Любой авторизованный |
+| `POST` | `/api/v1/events/{id}/register` | Регистрация на мероприятие | APPLICANT |
+| `DELETE` | `/api/v1/events/{id}/register` | Отмена регистрации | APPLICANT |
+| `GET` | `/api/v1/events/{id}/participants` | Список участников | EMPLOYER/CURATOR |
+| `POST` | `/api/v1/events/{id}/check-in` | Отметка присутствия по коду | EMPLOYER/CURATOR |
+
+**Логика регистрации:**
+- Если есть места → статус `confirmed`, генерируется `check_in_code`
+- Если мест нет → статус `waitlist` (лист ожидания)
+- При отмене участник из waitlist автоматически продвигается
+- Работодатель получает уведомление о каждой регистрации
+
+**Check-in:**
+- Уникальный код (8 символов) для офлайн-верификации
+- Работодатель сканирует QR или вводит код вручную
+
+#### 🔍 Поиск соискателей (Applicants)
+
+| Метод | Эндпоинт | Описание | Auth |
+|-------|----------|----------|------|
+| `GET` | `/api/v1/applicants/search` | Поиск по навыкам, университету, году | EMPLOYER/CURATOR |
+| `GET` | `/api/v1/applicants/{profile_id}` | Детальный профиль | EMPLOYER/CURATOR |
+| `POST` | `/api/v1/applicants/{profile_id}/contact` | Запрос в контакты | EMPLOYER |
+
+**Фильтры поиска:**
+- `skills` — список навыков через запятую (Python,FastAPI,PostgreSQL)
+- `university` — часть названия университета
+- `graduation_year` — год выпуска
+- `city` — город
+
+**Приватность:**
+- В поиске участвуют только `public_profile=true`
+- Скрытые профили не отображаются в результатах
+- Детальный профиль применяет настройки приватности
+
+**Сортировка:**
+- По навыкам → по релевантности (количество совпадений)
+- Без навыков → по году выпуска (recent first)
+
+#### 🛡 Модерация вакансий (Curator Moderation)
+
+| Метод | Эндпоинт | Описание | Auth |
+|-------|----------|----------|------|
+| `GET` | `/api/v1/opportunities/moderation/pending` | Список на модерации | CURATOR |
+| `GET` | `/api/v1/opportunities/moderation/{id}` | Детали для проверки | CURATOR |
+| `POST` | `/api/v1/opportunities/moderation/{id}/review` | Одобрить/отклонить | CURATOR |
+
+**Статусы модерации:**
+- `DRAFT` → черновик (создание/редактирование)
+- `PLANNED` → отправлено на модерацию
+- `ACTIVE` → одобрено и опубликовано
+- `REJECTED` → отклонено (возврат в DRAFT)
+
+**Уведомления:**
+- Работодатель получает `NotificationType.SYSTEM` о результате
+- Комментарий куратора виден работодателю
+
 ---
 
 ## 🛠 Разработка

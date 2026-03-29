@@ -61,6 +61,12 @@ class UserAlreadyExistsError(AppError):
     error_code = "USER_ALREADY_EXISTS"
 
 
+class ContactRequestAlreadyExistsError(AppError):
+    status_code = status.HTTP_409_CONFLICT
+    detail = "Contact request already exists"
+    error_code = "CONTACT_REQUEST_ALREADY_EXISTS"
+
+
 # ─── Repository/Database Errors ───
 class RepositoryError(AppError):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -125,6 +131,42 @@ class CompanyNotVerifiedError(AppError):
     status_code = status.HTTP_400_BAD_REQUEST
     detail = "Cannot apply to unverified company"
     error_code = "COMPANY_NOT_VERIFIED"
+
+
+# ─── Event Registration Errors (400, 404, 409) ───
+class EventRegistrationNotFoundError(NotFoundError):
+    detail = "Event registration not found"
+    error_code = "EVENT_REGISTRATION_NOT_FOUND"
+
+
+class EventRegistrationAlreadyExistsError(AppError):
+    status_code = status.HTTP_409_CONFLICT
+    detail = "You have already registered for this event"
+    error_code = "EVENT_REGISTRATION_ALREADY_EXISTS"
+
+
+class EventNotActiveError(AppError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Event is not active"
+    error_code = "EVENT_NOT_ACTIVE"
+
+
+class EventNotEventTypeError(AppError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Opportunity is not an event"
+    error_code = "NOT_AN_EVENT"
+
+
+class EventCapacityReachedError(AppError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Event capacity reached. You can only join waitlist"
+    error_code = "EVENT_CAPACITY_REACHED"
+
+
+class EventCheckInNotAllowedError(AppError):
+    status_code = status.HTTP_400_BAD_REQUEST
+    detail = "Check-in is not allowed for this registration"
+    error_code = "EVENT_CHECK_IN_NOT_ALLOWED"
 
 
 # ─── External Service Errors (502) ───

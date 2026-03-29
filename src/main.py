@@ -7,9 +7,12 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from starlette.responses import Response
 
+from src.api.v1.endpoints.applicants import router as applicants_router
 from src.api.v1.endpoints.applications import applicant_router, employer_applications_router, employer_opportunities_router
 from src.api.v1.endpoints.auth import router as auth_router
 from src.api.v1.endpoints.companies import router as companies_router
+from src.api.v1.endpoints.events import router as events_router
+from src.api.v1.endpoints.favorites import router as favorites_router
 from src.api.v1.endpoints.glossary import router as glossary_router
 from src.api.v1.endpoints.opportunities import router as opportunities_router
 from src.api.v1.endpoints.recommendations import router as recommendations_router
@@ -117,10 +120,25 @@ def create_app() -> FastAPI:
     app.include_router(glossary_router, prefix=settings.API_V1_STR)
     app.include_router(uploads_router, prefix=settings.API_V1_STR)
     app.include_router(recommendations_router, prefix=settings.API_V1_STR)
+    app.include_router(favorites_router, prefix=settings.API_V1_STR)
+    app.include_router(events_router, prefix=settings.API_V1_STR)
+    app.include_router(applicants_router, prefix=settings.API_V1_STR)
 
     logger.info(
         "API routers registered",
-        routes=["applications", "auth", "companies", "glossary", "opportunities", "users", "uploads", "recommendations"],
+        routes=[
+            "applications",
+            "auth",
+            "companies",
+            "glossary",
+            "opportunities",
+            "users",
+            "uploads",
+            "recommendations",
+            "favorites",
+            "events",
+            "applicants",
+        ],
     )
 
     return app

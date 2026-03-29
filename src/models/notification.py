@@ -25,6 +25,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from src.db.base import Base, TimestampMixin, UUIDMixin
 from src.models.enums import NotificationType, ReviewTarget
 
+# Explicit export for mypy
+__all__ = ["Notification", "Review", "NotificationType", "ReviewTarget"]
+
 if TYPE_CHECKING:
     from src.models.company import Company
     from src.models.user import User

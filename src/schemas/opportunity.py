@@ -104,6 +104,7 @@ class OpportunityMapMarker(BaseModel):
     salary_max: int | None = None
     work_format: str
     city: str | None = None
+    is_favorite_company: bool = False
 
 
 class OpportunityMapResponse(BaseModel):
@@ -422,3 +423,89 @@ class OpportunityPublishResponse(SchemaBase):
     status: str
     message: str = "Opportunity published successfully"
     requires_moderation: bool = False
+
+
+# ════════════════════════════════════════════════════════════
+#  Moderation schemas (Curator)
+# ════════════════════════════════════════════════════════════
+
+
+class ModerationReviewRequest(BaseModel):
+    """Запрос на проверку вакансии куратором."""
+
+    approve: bool = Field(..., description="True для одобрения, False для отклонения")
+    comment: str | None = Field(None, max_length=1000, description="Комментарий модератора")
+
+
+class ModerationOpportunityItem(SchemaBase):
+    """Элемент списка вакансий на модерации."""
+
+    id: uuid.UUID
+    type: str
+    title: str
+    status: str
+    company: CompanyShort
+    published_at: datetime | None = None
+    created_at: datetime
+    moderation_comment: str | None = None
+
+
+class ModerationOpportunityListResponse(BaseModel):
+    """Ответ на GET /opportunities/moderation/pending."""
+
+    items: list[ModerationOpportunityItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class ModerationOpportunityDetail(SchemaBase):
+    """Детальная информация о вакансии для модерации."""
+
+    id: uuid.UUID
+    type: str
+    title: str
+    status: str
+    description: str | None = None
+    requirements: str | None = None
+    responsibilities: str | None = None
+
+    work_format: str
+    employment_type: str | None = None
+    experience_level: str | None = None
+
+    company: CompanyShort
+    location: LocationInfo
+    salary: SalaryInfo
+
+    skills: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+    contact_name: str | None = None
+    contact_email: str | None = None
+    contact_url: str | None = None
+
+    published_at: datetime | None = None
+    expires_at: datetime | None = None
+    event_start_at: datetime | None = None
+    event_end_at: datetime | None = None
+    max_participants: int | None = None
+    current_participants: int = 0
+
+    views_count: int = 0
+    applications_count: int = 0
+    favorites_count: int = 0
+
+    created_at: datetime
+    updated_at: datetime
+    moderation_comment: str | None = None
+
+
+class ModerationReviewResponse(SchemaBase):
+    """Ответ на POST /opportunities/moderation/{id}/review."""
+
+    id: uuid.UUID
+    status: str
+    is_moderated: bool
+    message: str
+    moderation_comment: str | None = None

@@ -236,7 +236,6 @@ class ApplicantSearchItem(SchemaBase):
     """Элемент списка в поиске соискателей."""
 
     id: uuid.UUID
-    email: str
     first_name: str
     last_name: str
     university: str | None = None
@@ -244,6 +243,7 @@ class ApplicantSearchItem(SchemaBase):
     skills: list[str] = []
     avatar_url: str | None = None
     headline: str | None = None
+    is_contact: bool = False  # True если уже connected
 
 
 class ApplicantSearchResponse(SchemaBase):
@@ -253,3 +253,60 @@ class ApplicantSearchResponse(SchemaBase):
     total: int
     limit: int
     offset: int
+
+
+class ApplicantDetailResponse(SchemaBase):
+    """
+    Детальный профиль соискателя с учётом приватности.
+
+    Используется для отображения профиля работодателю/куратору.
+    Если public_profile=False, большинство полей будут скрыты.
+    """
+
+    id: uuid.UUID
+    first_name: str
+    last_name: str
+    middle_name: str | None = None
+    university: str | None = None
+    faculty: str | None = None
+    specialization: str | None = None
+    graduation_year: int | None = None
+    study_year: int | None = None
+    headline: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = None
+    phone: str | None = None
+    social_links: dict[str, str] = {}
+    portfolio_url: str | None = None
+    cv_url: str | None = None
+    skills: list[str] = []
+    privacy_settings: dict[str, Any] = {}
+    career_preferences: dict[str, Any] = {}
+    show_full_data: bool = False
+    is_contact: bool = False  # True если уже connected
+
+
+class ApplicantProfileShort(SchemaBase):
+    """
+    Краткий профиль соискателя для отображения в списках.
+
+    Используется в мероприятиях и других местах где нужна краткая информация.
+    """
+
+    id: uuid.UUID
+    first_name: str
+    last_name: str
+    middle_name: str | None = None
+    university: str | None = None
+    graduation_year: int | None = None
+    headline: str | None = None
+    bio: str | None = None
+    avatar_url: str | None = None
+    phone: str | None = None
+    social_links: dict[str, str] = {}
+    portfolio_url: str | None = None
+    cv_url: str | None = None
+    skills: list[str] = []
+    privacy_settings: dict[str, Any] = {}
+    career_preferences: dict[str, Any] = {}
+    show_full_data: bool = False

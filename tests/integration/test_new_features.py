@@ -212,8 +212,8 @@ async def test_applicant_search_respects_privacy(
     data = response.json()
 
     # Check that applicant2 (private profile) is not in results
-    emails = [item["email"] for item in data["items"]]
-    assert test_users["applicant2"].email not in emails
+    names = [(item["first_name"], item["last_name"]) for item in data["items"]]
+    assert ("Jane", "Smith") not in names
 
 
 @pytest.mark.asyncio

@@ -1,10 +1,16 @@
 import uuid
+from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+if TYPE_CHECKING:
+    from src.services.applicant import ApplicantService
+    from src.services.event import EventService
+    from src.services.favorites import FavoriteCompanyService, FavoriteService
 
 from src.core.config import settings
 from src.core.security import decode_token
@@ -38,6 +44,10 @@ __all__ = [
     "get_recommendation_repository",
     "get_recommendation_service",
     "get_upload_service",
+    "get_favorite_service",
+    "get_favorite_company_service",
+    "get_event_service",
+    "get_applicant_service",
 ]
 
 reusable_oauth2 = OAuth2PasswordBearer(
@@ -101,6 +111,38 @@ async def get_current_user(
         )
 
     return user
+
+
+async def get_current_user_optional(
+    db: AsyncSession = Depends(get_db),
+    token: str | None = Depends(reusable_oauth2),
+) -> User | None:
+    """
+    Опциональная авторизация для публичных эндпоинтов.
+
+    Не выбрасывает 401 если токен отсутствует — просто возвращает None.
+    """
+    if not token:
+        return None
+
+    try:
+        if await token_blacklist.is_blacklisted(token):
+            return None
+
+        payload = decode_token(token, expected_type="access")
+        if payload is None:
+            return None
+
+        user_id = uuid.UUID(payload["sub"])
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+
+        if not user or not user.is_active:
+            return None
+
+        return user
+    except Exception:
+        return None
 
 
 async def get_current_verified_user(
@@ -203,3 +245,65 @@ def get_upload_service() -> UploadService:
     Dependency для получения сервиса загрузок.
     """
     return UploadService()
+
+
+# ─── Favorites Dependencies ────────────────────────────────────
+
+
+def get_favorite_service(db: AsyncSession = Depends(get_db)) -> FavoriteService:
+    """
+    Dependency для получения сервиса избранных вакансий.
+    """
+    from src.repositories.favorites import FavoriteCompanyRepository, FavoriteRepository
+    from src.repositories.opportunity import OpportunityRepository
+    from src.services.favorites import FavoriteService
+
+    return FavoriteService(
+        favorite_repo=FavoriteRepository(db),
+        opportunity_repo=OpportunityRepository(db),
+        favorite_company_repo=FavoriteCompanyRepository(db),
+    )
+
+
+def get_favorite_company_service(db: AsyncSession = Depends(get_db)) -> FavoriteCompanyService:
+    """
+    Dependency для получения сервиса избранных компаний.
+    """
+    from src.repositories.favorites import FavoriteCompanyRepository
+    from src.services.favorites import FavoriteCompanyService
+
+    return FavoriteCompanyService(
+        favorite_company_repo=FavoriteCompanyRepository(db),
+    )
+
+
+# ─── Event Dependencies ────────────────────────────────────
+
+
+def get_event_service(db: AsyncSession = Depends(get_db)) -> EventService:
+    """
+    Dependency для получения сервиса регистрации на мероприятия.
+    """
+    from src.repositories.event import EventRegistrationRepository
+    from src.repositories.opportunity import OpportunityRepository
+    from src.services.event import EventService
+
+    return EventService(
+        event_repo=EventRegistrationRepository(db),
+        opportunity_repo=OpportunityRepository(db),
+    )
+
+
+# ─── Applicant Dependencies ────────────────────────────────────
+
+
+def get_applicant_service(db: AsyncSession = Depends(get_db)) -> ApplicantService:
+    """
+    Dependency для получения сервиса поиска соискателей.
+    """
+    from src.repositories.applicant import ApplicantRepository
+    from src.services.applicant import ApplicantService
+
+    return ApplicantService(
+        applicant_repo=ApplicantRepository(db),
+    )

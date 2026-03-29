@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from uuid import UUID
 
 from geoalchemy2 import Geometry
@@ -166,6 +167,7 @@ class OpportunityRepository(BaseRepository[Opportunity]):
         employment_type: str | None = None,
         salary_min: int | None = None,
         salary_max: int | None = None,
+        user_id: uuid.UUID | None = None,
         # Bounding box (опционально, если карта двигается)
         sw_lat: float | None = None,
         sw_lng: float | None = None,
@@ -179,12 +181,18 @@ class OpportunityRepository(BaseRepository[Opportunity]):
         Возвращаем только возможности с location IS NOT NULL.
         Кластеризацию делает react-leaflet-cluster на клиенте.
         limit=500 — разумный потолок для карты без деградации браузера.
+
+        Args:
+            user_id: ID текущего пользователя для определения избранных компаний
         """
         try:
+            from src.models.social import FavoriteCompany
+
             # Извлекаем координаты через PostGIS
             lat_col = func.ST_Y(cast(Opportunity.location, Geometry)).label("lat")
             lng_col = func.ST_X(cast(Opportunity.location, Geometry)).label("lng")
 
+            # Базовый запрос с компанией
             stmt = (
                 select(
                     Opportunity.id,
@@ -194,6 +202,7 @@ class OpportunityRepository(BaseRepository[Opportunity]):
                     Opportunity.city,
                     Opportunity.salary_min,
                     Opportunity.salary_max,
+                    Company.id.label("company_id"),
                     Company.name.label("company_name"),
                     Company.logo_url.label("company_logo_url"),
                     lat_col,
@@ -207,6 +216,17 @@ class OpportunityRepository(BaseRepository[Opportunity]):
                     Opportunity.location.isnot(None),  # только с координатами
                 )
             )
+
+            # Добавляем LEFT JOIN с favorite_companies если передан user_id
+            if user_id is not None:
+                stmt = stmt.outerjoin(
+                    FavoriteCompany, (FavoriteCompany.company_id == Company.id) & (FavoriteCompany.user_id == user_id)
+                ).add_columns((FavoriteCompany.id.isnot(None)).label("is_favorite_company"))
+            else:
+                # Для неавторизованных пользователей — всегда False
+                from sqlalchemy import false
+
+                stmt = stmt.add_columns(false().label("is_favorite_company"))
 
             # Применяем все фильтры (единообразно со списком)
             stmt = self._apply_filters(
@@ -242,6 +262,7 @@ class OpportunityRepository(BaseRepository[Opportunity]):
                     company_logo_url=row.company_logo_url,
                     lat=row.lat,
                     lng=row.lng,
+                    is_favorite_company=row.is_favorite_company if hasattr(row, "is_favorite_company") else False,
                 )
                 for row in rows
                 if row.lat is not None and row.lng is not None  # доп. защита
@@ -573,6 +594,108 @@ class OpportunityRepository(BaseRepository[Opportunity]):
             return result.scalar_one_or_none()
         except SQLAlchemyError as e:
             logger.error("OpportunityRepository.get_company_id_by_user error: %s", e)
+            raise RepositoryError() from e
+
+    # ════════════════════════════════════════════════════════════
+    #  Moderation methods (Curator)
+    # ════════════════════════════════════════════════════════════
+
+    async def get_pending_moderation_list(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Opportunity], int]:
+        """
+        Получить список вакансий, ожидающих модерации.
+        Status = PLANNED, is_moderated = False
+        """
+        try:
+            # Считаем total
+            count_stmt = (
+                select(func.count())
+                .select_from(Opportunity)
+                .where(
+                    Opportunity.status == OpportunityStatus.PLANNED,
+                    Opportunity.is_moderated == False,  # noqa: E712
+                )
+            )
+            total_result = await self.db.execute(count_stmt)
+            total = total_result.scalar_one() or 0
+
+            # Получаем вакансии с компанией
+            stmt = (
+                select(Opportunity)
+                .options(selectinload(Opportunity.company))
+                .where(
+                    Opportunity.status == OpportunityStatus.PLANNED,
+                    Opportunity.is_moderated == False,  # noqa: E712
+                )
+                .order_by(Opportunity.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            result = await self.db.execute(stmt)
+            opportunities = list(result.scalars().unique().all())
+
+            return opportunities, total
+
+        except SQLAlchemyError as e:
+            logger.error("OpportunityRepository.get_pending_moderation_list error: %s", e)
+            raise RepositoryError() from e
+
+    async def approve_opportunity(
+        self,
+        opportunity: Opportunity,
+        curator_id: UUID,
+        comment: str | None = None,
+    ) -> Opportunity:
+        """
+        Одобрить вакансию куратором.
+        Status → ACTIVE, is_moderated → True, published_at → now
+        """
+        try:
+            from datetime import datetime
+
+            opportunity.status = OpportunityStatus.ACTIVE
+            opportunity.is_moderated = True
+            opportunity.moderated_by_id = curator_id
+            opportunity.moderation_comment = comment
+            opportunity.published_at = datetime.now(datetime.UTC)  # type: ignore[attr-defined]
+
+            await self.db.commit()
+            await self.db.refresh(opportunity)
+
+            return opportunity
+
+        except SQLAlchemyError as e:
+            await self.db.rollback()
+            logger.error("OpportunityRepository.approve_opportunity error: %s", e)
+            raise RepositoryError() from e
+
+    async def reject_opportunity(
+        self,
+        opportunity: Opportunity,
+        curator_id: UUID,
+        comment: str | None = None,
+    ) -> Opportunity:
+        """
+        Отклонить вакансию куратором.
+        Status → DRAFT, is_moderated → False
+        """
+        try:
+            opportunity.status = OpportunityStatus.DRAFT
+            opportunity.is_moderated = False
+            opportunity.moderated_by_id = curator_id
+            opportunity.moderation_comment = comment
+
+            await self.db.commit()
+            await self.db.refresh(opportunity)
+
+            return opportunity
+
+        except SQLAlchemyError as e:
+            await self.db.rollback()
+            logger.error("OpportunityRepository.reject_opportunity error: %s", e)
             raise RepositoryError() from e
 
     # ─── Конвертеры ORM → DTO ────────────────────────────────

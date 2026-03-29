@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from uuid import UUID
 
 from geoalchemy2.functions import ST_X, ST_Y
@@ -25,12 +26,16 @@ from src.core.exceptions import (
     OpportunityValidationError,
 )
 from src.models.enums import OpportunityStatus, OpportunityType, WorkFormat
+from src.models.notification import Notification
 from src.models.opportunity import Opportunity
 from src.models.user import User
 from src.repositories.opportunity import OpportunityRepository
 from src.schemas.opportunity import (
     CompanyShort,
     LocationInfo,
+    ModerationOpportunityDetail,
+    ModerationOpportunityListResponse,
+    ModerationReviewResponse,
     OpportunityCreate,
     OpportunityDetail,
     OpportunityEmployerDetail,
@@ -109,6 +114,7 @@ class OpportunityService:
         employment_type: str | None = None,
         salary_min: int | None = None,
         salary_max: int | None = None,
+        user_id: uuid.UUID | None = None,
         sw_lat: float | None = None,
         sw_lng: float | None = None,
         ne_lat: float | None = None,
@@ -127,6 +133,7 @@ class OpportunityService:
             employment_type=employment_type,
             salary_min=salary_min,
             salary_max=salary_max,
+            user_id=user_id,
             sw_lat=sw_lat,
             sw_lng=sw_lng,
             ne_lat=ne_lat,
@@ -675,3 +682,226 @@ class OpportunityService:
                 favorites_count=opp.favorites_count,
             ),
         )
+
+    # ════════════════════════════════════════════════════════════
+    #  Moderation methods (Curator)
+    # ════════════════════════════════════════════════════════════
+
+    async def get_pending_moderation_list(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ModerationOpportunityListResponse:  # noqa: F821
+        """
+        Получить список вакансий, ожидающих модерации.
+        """
+        opportunities, total = await self.opportunity_repo.get_pending_moderation_list(
+            limit=limit,
+            offset=offset,
+        )
+
+        from src.schemas.opportunity import ModerationOpportunityItem, ModerationOpportunityListResponse
+
+        items = [
+            ModerationOpportunityItem(
+                id=opp.id,
+                type=opp.type,
+                title=opp.title,
+                status=opp.status,
+                company=CompanyShort(
+                    id=opp.company.id,
+                    name=opp.company.name,
+                    logo_url=opp.company.logo_url,
+                    city=opp.company.city,
+                ),
+                published_at=opp.published_at,
+                created_at=opp.created_at,
+                moderation_comment=opp.moderation_comment,
+            )
+            for opp in opportunities
+        ]
+
+        return ModerationOpportunityListResponse(
+            items=items,
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    async def get_moderation_detail(self, opportunity_id: UUID) -> ModerationOpportunityDetail:  # noqa: F821
+        """
+        Получить детальную информацию о вакансии для модерации.
+        """
+        opp = await self.opportunity_repo.get_detail(opportunity_id)
+        if not opp:
+            from src.core.exceptions import NotFoundError
+
+            raise NotFoundError(detail="Opportunity not found")
+
+        # Извлекаем координаты
+        lat, lng = None, None
+        if opp.location is not None:
+            try:
+                lat_result = await self.opportunity_repo.db.execute(
+                    select(
+                        ST_Y(opp.location),
+                        ST_X(opp.location),
+                    )
+                )
+                lat, lng = lat_result.one()
+            except SQLAlchemyError, TypeError, ValueError:
+                lat, lng = None, None
+
+        # Навыки и теги
+        skills = [os.skill.name for os in opp.opportunity_skills if os.skill]
+        tags = [ot.tag.name for ot in opp.opportunity_tags if ot.tag]
+
+        from src.schemas.opportunity import ModerationOpportunityDetail
+
+        return ModerationOpportunityDetail(
+            id=opp.id,
+            type=opp.type,
+            title=opp.title,
+            status=opp.status,
+            description=opp.description,
+            requirements=opp.requirements,
+            responsibilities=opp.responsibilities,
+            work_format=opp.work_format,
+            employment_type=opp.employment_type,
+            experience_level=opp.experience_level,
+            company=CompanyShort(
+                id=opp.company.id,
+                name=opp.company.name,
+                logo_url=opp.company.logo_url,
+                city=opp.company.city,
+            ),
+            location=LocationInfo(
+                lat=lat,
+                lng=lng,
+                address=opp.address,
+                city=opp.city,
+            ),
+            salary=SalaryInfo(
+                min=opp.salary_min,
+                max=opp.salary_max,
+                currency=opp.salary_currency,
+                gross=opp.salary_gross,
+            ),
+            skills=skills,
+            tags=tags,
+            contact_name=opp.contact_name,
+            contact_email=opp.contact_email,
+            contact_url=opp.contact_url,
+            published_at=opp.published_at,
+            expires_at=opp.expires_at,
+            event_start_at=opp.event_start_at,
+            event_end_at=opp.event_end_at,
+            max_participants=opp.max_participants,
+            current_participants=opp.current_participants,
+            views_count=opp.views_count,
+            applications_count=opp.applications_count,
+            favorites_count=opp.favorites_count,
+            created_at=opp.created_at,
+            updated_at=opp.updated_at,
+            moderation_comment=opp.moderation_comment,
+        )
+
+    async def review_opportunity(
+        self,
+        opportunity_id: UUID,
+        curator_id: UUID,
+        approve: bool,
+        comment: str | None = None,
+    ) -> ModerationReviewResponse:  # noqa: F821
+        """
+        Проверить вакансию куратором (одобрить или отклонить).
+        """
+        opp = await self.opportunity_repo.get_detail(opportunity_id)
+        if not opp:
+            from src.core.exceptions import NotFoundError
+
+            raise NotFoundError(detail="Opportunity not found")
+
+        # Проверяем, что вакансия ожидает модерации
+        if opp.status != OpportunityStatus.PLANNED or opp.is_moderated:
+            from src.core.exceptions import OpportunityValidationError
+
+            raise OpportunityValidationError(detail="Opportunity is not pending moderation or already moderated")
+
+        # Одобрение или отклонение
+        if approve:
+            opportunity = await self.opportunity_repo.approve_opportunity(
+                opportunity=opp,
+                curator_id=curator_id,
+                comment=comment,
+            )
+            message = "Opportunity approved and published"
+            # Создаём уведомление работодателю
+            await self._create_moderation_notification(
+                employer_id=opp.company.owner_id,
+                opportunity_id=opportunity_id,
+                approved=True,
+                comment=comment,
+            )
+        else:
+            opportunity = await self.opportunity_repo.reject_opportunity(
+                opportunity=opp,
+                curator_id=curator_id,
+                comment=comment,
+            )
+            message = "Opportunity rejected and returned to draft"
+            # Создаём уведомление работодателю
+            await self._create_moderation_notification(
+                employer_id=opp.company.owner_id,
+                opportunity_id=opportunity_id,
+                approved=False,
+                comment=comment,
+            )
+
+        from src.schemas.opportunity import ModerationReviewResponse
+
+        return ModerationReviewResponse(
+            id=opportunity.id,
+            status=opportunity.status,
+            is_moderated=opportunity.is_moderated,
+            message=message,
+            moderation_comment=opportunity.moderation_comment,
+        )
+
+    async def _create_moderation_notification(
+        self,
+        employer_id: UUID,
+        opportunity_id: UUID,
+        approved: bool,
+        comment: str | None = None,
+    ) -> None:
+        """
+        Создать уведомление работодателю о результате модерации.
+        """
+        from src.models.notification import NotificationType
+
+        title = "Вакансия одобрена" if approved else "Вакансия отклонена"
+        body = (
+            "Ваша вакансия опубликована и теперь видна соискателям."
+            if approved
+            else f"Вакансия возвращена в черновики. {comment or ''}"
+        )
+
+        notification = Notification(
+            recipient_id=employer_id,
+            type=NotificationType.SYSTEM,
+            title=title,
+            body=body,
+            payload={
+                "type": "moderation",
+                "opportunity_id": str(opportunity_id),
+                "approved": approved,
+            },
+        )
+
+        self.opportunity_repo.db.add(notification)
+        try:
+            await self.opportunity_repo.db.commit()
+        except SQLAlchemyError as e:
+            logger.error("Failed to create moderation notification: %s", e)
+            await self.opportunity_repo.db.rollback()
